@@ -715,7 +715,7 @@ main {
     <div class="stack-head">
       <div class="sf-eyebrow">Daily stack</div>
       <div class="sf-title">Tap each as you take it</div>
-      <div class="stack-progress-text" id="stackProgressText">— / — taken today · resets at 6 AM</div>
+      <div class="stack-progress-text" id="stackProgressText">— / — taken today · resets at 6:30 AM</div>
     </div>
 
     <div class="stack-progress-track">
@@ -760,7 +760,7 @@ main {
 
   function getActiveDate() {
     const now = new Date();
-    if (now.getHours() < 6) now.setDate(now.getDate() - 1);
+    if (now.getHours() < 6 || (now.getHours() === 6 && now.getMinutes() < 30)) now.setDate(now.getDate() - 1);
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     const d = String(now.getDate()).padStart(2, '0');
@@ -933,7 +933,7 @@ main {
     const totalCount = items.length;
     const takenCount = items.filter(i => taken[i.id]).length;
     document.getElementById('stackProgressText').textContent =
-      `${takenCount} / ${totalCount} taken today · resets at 6 AM`;
+      `${takenCount} / ${totalCount} taken today · resets at 6:30 AM`;
     const pct = totalCount === 0 ? 0 : (takenCount / totalCount) * 100;
     document.getElementById('stackProgressBar').style.width = pct + '%';
 
