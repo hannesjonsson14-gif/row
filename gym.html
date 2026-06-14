@@ -18,6 +18,9 @@
 const CONFIG = {
   appTitle: "V-Taper Recomp",
 
+  // Bump this whenever you change days/exercises/gyms so localStorage is reset.
+  configVersion: 2,
+
   units: "kg",
 
   gyms: [
@@ -1721,6 +1724,18 @@ img, video, canvas, svg { max-width: 100%; }
   }
   function normalize(s) {
     s = s || {};
+    // When configVersion changes, reset structure (gyms/days/exercises/rotation/anchor)
+    // but preserve workout logs so history is not lost.
+    if ((s.configVersion || 0) !== (CONFIG.configVersion || 0)) {
+      s.gyms      = CONFIG.gyms.slice();
+      s.days      = CONFIG.days.slice();
+      s.exercises = buildDefaultExercises();
+      s.splitRotation = null;
+      s.splitAnchor   = null;
+      s.filterGym = CONFIG.gyms[0].id;
+      s.filterDay = CONFIG.days[0].id;
+      s.configVersion = CONFIG.configVersion || 0;
+    }
     s.units = s.units || CONFIG.units || 'kg';
     s.gyms  = (Array.isArray(s.gyms)  && s.gyms.length)  ? s.gyms  : CONFIG.gyms.slice();
     s.days  = (Array.isArray(s.days)  && s.days.length)  ? s.days  : CONFIG.days.slice();
