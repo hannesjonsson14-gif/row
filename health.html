@@ -457,7 +457,8 @@ main {
   .stack-card { padding: 18px 16px 14px; }
   .stack-item { grid-template-columns: 28px 1fr auto; gap: 8px; }
   .stack-item .stack-low-btn { grid-column: 2 / 4; margin-top: 4px; justify-self: start; }
-  .stack-add-row { grid-template-columns: 1fr 1fr; }
+  .stack-add-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .stack-input { min-width: 0; }
   .stack-add-row .stack-add-btn { grid-column: 1 / -1; }
   .stack-add-row .stack-select { grid-column: 1 / -1; }
   .stack-search-results { width: 100%; }
@@ -468,6 +469,10 @@ main {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+/* iOS Safari zooms the page when focusing an input under 16px */
+@media (max-width: 768px) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea { font-size: 16px !important; }
+}
 </style>
 </head>
 <body>
