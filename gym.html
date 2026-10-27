@@ -254,6 +254,13 @@ img, video, canvas, svg { max-width: 100%; }
   cursor: pointer; transition: background 0.15s, color 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
+/* Session progress strip: one segment per exercise of the selected day */
+.wo-progress { display: flex; gap: 4px; margin: 12px 0 2px; }
+.wo-progress button { flex: 1; height: 8px; padding: 0; border: 0; border-radius: 999px; background: rgba(255,255,255,0.09); cursor: pointer; position: relative; overflow: hidden; }
+.wo-progress button i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--good); transition: width 0.3s; }
+.wo-progress button.cur { outline: 1.5px solid rgba(255,255,255,0.7); outline-offset: 1.5px; }
+.wo-progress-meta { font-size: 11px; color: var(--text-3); margin-top: 8px; font-family: var(--font-mono); letter-spacing: 0.02em; }
+.wo-progress-meta b { color: var(--good); font-weight: 700; }
 /* Day picker holds more days than fit on a phone: scroll sideways instead of truncating names. */
 #daySeg { overflow-x: auto; scrollbar-width: none; }
 #daySeg::-webkit-scrollbar { display: none; }
@@ -1466,6 +1473,7 @@ img, video, canvas, svg { max-width: 100%; }
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
         </button>
       </div>
+      <div id="woProgressWrap"><div class="wo-progress" id="woProgress"></div><div class="wo-progress-meta" id="woProgressMeta"></div></div>
       <div class="po-no-ex" id="noExMsg" style="display:none">No exercises here yet. Tap <strong>+</strong> to add one.</div>
       <div class="po-tips-wrap" id="exTipsWrap">
         <div class="po-tips-meta" id="exTipsMeta"></div>
@@ -1475,7 +1483,7 @@ img, video, canvas, svg { max-width: 100%; }
 
     <!-- Log a set -->
     <div class="po-sub-section">
-      <div class="po-sub-title">Log today's top set</div>
+      <div class="po-sub-title">Log a set</div>
       <div class="po-bw-banner" id="bwBanner">Bodyweight — log reps only</div>
       <div class="po-last-set" id="lastSet">
         <span class="po-last-label">Last time</span>
@@ -1789,6 +1797,14 @@ img, video, canvas, svg { max-width: 100%; }
     if (!ex) { ex = f[0]; state.currentEx = ex.id; saveState(); }
     return ex;
   }
+  // Sets logged today for an exercise (local calendar day).
+  function localDayKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function setsToday(ex) {
+    const t = localDayKey(new Date());
+    return (state.logs[ex.id] || []).filter(l => localDayKey(new Date(l.date)) === t).length;
+  }
+  function targetSets(ex) { return Math.max(1, parseInt(ex.sets, 10) || 1); }
+  function exDone(ex) { return setsToday(ex) >= targetSets(ex); }
   function getLogs() { return (state.logs[state.currentEx] || []).slice(); }
 
   // Prescription engine — "what should I do next session?"
@@ -1861,7 +1877,9 @@ img, video, canvas, svg { max-width: 100%; }
     sel.innerHTML = f.map(e => {
       const wLbl = e.bw ? ' · BW' : (e.startWeight ? ' · ' + e.startWeight + unit() : '');
       const sh = e.gym === 'both' ? ' ★' : '';
-      return '<option value="' + e.id + '"' + (e.id === state.currentEx ? ' selected' : '') + '>' + escape(e.name) + wLbl + sh + '</option>';
+      const n = setsToday(e);
+      const mark = exDone(e) ? '✓ ' : (n ? n + '/' + targetSets(e) + ' · ' : '');
+      return '<option value="' + e.id + '"' + (e.id === state.currentEx ? ' selected' : '') + '>' + mark + escape(e.name) + wLbl + sh + '</option>';
     }).join('');
   }
   function renderForm() {
@@ -2075,6 +2093,29 @@ img, video, canvas, svg { max-width: 100%; }
     row.dataset.value = String(active);
   }
 
+  function renderProgress() {
+    const wrap = $('woProgressWrap');
+    const f = getFiltered();
+    if (!f.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    const cur = getCurrentEx();
+    $('woProgress').innerHTML = f.map(e => {
+      const pct = Math.min(100, setsToday(e) / targetSets(e) * 100);
+      return '<button type="button" data-ex="' + e.id + '" class="' + (cur && cur.id === e.id ? 'cur' : '') + '" aria-label="' + escape(e.name) + ': ' + setsToday(e) + ' of ' + targetSets(e) + ' sets"><i style="width:' + pct + '%"></i></button>';
+    }).join('');
+    const total = f.reduce((a, e) => a + targetSets(e), 0);
+    const done = f.reduce((a, e) => a + Math.min(setsToday(e), targetSets(e)), 0);
+    const idx = cur ? f.findIndex(e => e.id === cur.id) + 1 : 0;
+    $('woProgressMeta').innerHTML = done >= total
+      ? '<b>Workout complete</b> · ' + total + ' sets'
+      : 'Exercise ' + idx + ' of ' + f.length + ' · ' + done + '/' + total + ' sets today';
+    // Log button shows which set is next
+    const btn = $('logBtn');
+    if (cur) {
+      const n = setsToday(cur), t = targetSets(cur);
+      btn.textContent = n >= t ? 'Log extra set' : 'Log set ' + (n + 1) + ' of ' + t;
+    } else btn.textContent = 'Log set';
+  }
   function renderTips() {
     const ex = getCurrentEx();
     const wrap = $('exTipsWrap');
@@ -2093,6 +2134,7 @@ img, video, canvas, svg { max-width: 100%; }
     renderDayPill();
     renderFilters(); renderSelect(); renderForm(); renderLastSet();
     renderRepsRow(); renderTips();
+    renderProgress();
     renderRx(); renderStats(); renderSparkline(); renderHistory();
     renderTodaysWorkout();
     renderPastWorkouts();
@@ -2303,6 +2345,11 @@ img, video, canvas, svg { max-width: 100%; }
     p.classList.add('active');
     $('repsRow').dataset.value = p.dataset.v;
   });
+  $('woProgress').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-ex]');
+    if (!b) return;
+    state.currentEx = b.dataset.ex; saveState(); renderAll();
+  });
   $('logBtn').addEventListener('click', () => {
     const ex = getCurrentEx();
     if (!ex) return;
@@ -2313,7 +2360,21 @@ img, video, canvas, svg { max-width: 100%; }
     const arr = state.logs[ex.id] || [];
     arr.push({ weight: w, reps: reps, date: new Date().toISOString() });
     state.logs[ex.id] = arr;
+    // Exercise finished -> move on to the next unfinished one in this day's list.
+    let advanced = '';
+    if (exDone(ex)) {
+      const f = getFiltered(), i = f.findIndex(e => e.id === ex.id);
+      const next = f.slice(i + 1).concat(f.slice(0, i)).find(e => !exDone(e));
+      if (next) { state.currentEx = next.id; advanced = next.name; }
+      else advanced = 'done';
+    }
     saveState(); renderAll();
+    if (advanced) {
+      const meta = $('woProgressMeta');
+      const note = advanced === 'done' ? 'Workout complete 🎉' : 'Next: ' + advanced;
+      const old = meta.innerHTML; meta.innerHTML = '<b>' + escape(note) + '</b>';
+      setTimeout(() => { if (meta.innerHTML.indexOf(escape(note)) !== -1) renderProgress(); }, 2200);
+    }
     // Strength changed → composition estimate may shift
     if (typeof wtRender === 'function') wtRender();
     // Tiny pulse on the button so the user feels the save
