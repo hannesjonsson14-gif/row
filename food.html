@@ -5,257 +5,461 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050506">
 <title>Food</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- defer: the page paints from localStorage without waiting on the CDN (offline, slow network). Deferred
+     scripts run in this order, all before DOMContentLoaded, where initCloudSync is called. supabase-js goes
+     last so the top bar and tab bar never wait for it: sync.js and topbar.js only read window.supabase from
+     initCloudSync / later taps, never while loading. -->
 <script src="sync.js" defer></script>
 <script src="topbar.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
 
 <style>
+/* ===================== row-tokens v1 =====================
+   Paste as the FIRST rule of each page's first <style>, identical on every page.
+   Then the page overrides only the 4 --accent* lines (see per-page accents).
+   Contrast numbers are measured on --surface-1 over --bg (≈ #101011). */
 :root {
-  --text-primary: #FAFAFA;
-  --text-secondary: #B8B6B0;
-  --text-tertiary: #8A8781;
-  --success: #6BE3A4;
-  --warning: #F2C063;
-  --danger: #FF6B6B;
-  --kcal: #FAFAFA;
-  --protein: #5CC8FF;
-  --carbs: #F2B04A;
-  --fat: #B58CFF;
-  --card: rgba(255,255,255,0.04);
-  --field: rgba(255,255,255,0.06);
-  --hair: rgba(255,255,255,0.08);
-  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+
+  /* ---- Base canvas (flat: no radial washes, no grain, no drift) ---- */
+  --bg: #050506;                         /* page; also <meta name="theme-color"> on every page */
+  --bg-elevated: #141416;                /* OPAQUE: sheets, modals, menus, workout session, overlays */
+  --bg-chrome: rgba(8, 8, 9, 0.78);      /* top bar / tab bar / finance nav, always with --blur-material */
+
+  /* ---- Surfaces: translucent white so they stack on any base (incl. inside the water iframe) ---- */
+  --surface-1: rgba(255, 255, 255, 0.045);   /* card                       ≈ #101011 */
+  --surface-2: rgba(255, 255, 255, 0.065);   /* row / field / tile in card ≈ #202020 */
+  --surface-3: rgba(255, 255, 255, 0.10);    /* tonal button, pressed row  ≈ #282829 */
+  --surface-active: rgba(255, 255, 255, 0.14); /* selected segment */
+  --surface-sunken: rgba(0, 0, 0, 0.28);     /* legacy recessed well (being phased out for --surface-2) */
+  --track: rgba(255, 255, 255, 0.08);        /* progress bar / ring track */
+
+  /* ---- Lines ---- */
+  --hairline: rgba(255, 255, 255, 0.06);       /* list separators, chrome edges */
+  --border: rgba(255, 255, 255, 0.08);         /* card/control edge where one is needed */
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --control-border: rgba(255, 255, 255, 0.36); /* unchecked checkbox ring: 3.3:1 (WCAG 1.4.11) */
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05); /* the "glass lip" on cards */
+
+  /* ---- Text (warm neutrals) ---- */
+  --text-1: #FAFAFA;   /* primary          16.9:1 */
+  --text-2: #B8B6B0;   /* secondary         9.4:1 */
+  --text-3: #94918A;   /* tertiary, placeholders: ≥5.0:1 on surface-2, 4.7:1 on surface-3. Lowest level for anything that carries information */
+  --text-4: #5E5C57;   /* 2.9:1 — disabled + purely decorative glyphs ONLY, never information */
+  --text-on-light: #0A0A0B; /* ink on porcelain / accent fills (16:1 on porcelain, ≥6.5:1 on every accent) */
+
+  /* ---- Porcelain: the one primary-button material, shared by every page ---- */
+  --porcelain: #F4F1EA;
+  --porcelain-fill: linear-gradient(180deg, #FFFFFF 0%, #ECE9E2 100%); /* subtle material sheen, buttons only */
+
+  /* ---- Semantic status (used only for status, never as decoration) ---- */
+  --positive: #6BE3A4;  --positive-tint: rgba(107, 227, 164, 0.14);  /* 11.9:1 */
+  --warning:  #F2C063;  --warning-tint:  rgba(242, 192, 99, 0.14);   /* 11.3:1 */
+  --negative: #FF6B6B;  --negative-tint: rgba(255, 107, 107, 0.14);  /* 6.9:1, 5.7:1 on its tint */
+
+  /* ---- Feature hues: each domain owns one; reused wherever that domain appears ---- */
+  --hue-day:     #E07658;  /* Main: Day Ring, goals: ember   6.3:1 (5.3:1 on its tint) */
+  --hue-health:  #7DD3FC;  /* Health stack + Water + top-bar water pill: sky  11.4:1 */
+  --hue-food:    #F4F1EA;  /* Food: kcal: porcelain  16.9:1 */
+  --hue-fitness: #6BE3A4;  /* Fitness: mint  11.9:1 */
+  --hue-finance: #B58CFF;  /* Finance: violet  7.4:1 (6.1:1 on its tint) */
+  --protein: #5CC8FF;  --carbs: #F2B04A;  --fat: #B58CFF;  /* macro DATA colours: bars/dots only */
+  --data-1: #7DD3FC; --data-2: #6BE3A4; --data-3: #F2C063; --data-4: #B58CFF; --data-5: #E07658; /* finance categories / donut */
+
+  /* ---- Page accent (each page overrides these four lines) ---- */
+  --accent: var(--hue-day);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(224, 118, 88, 0.14);
+  --accent-ring: rgba(224, 118, 88, 0.60);   /* focus outline + focused field border */
+
+  /* ---- Type ---- */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-micro: 11px;     /* eyebrows, tab labels, tags, axis labels (floor: nothing smaller) */
+  --fs-caption: 12px;   /* row meta, helper text, mono sub-lines */
+  --fs-footnote: 13px;  /* secondary text, segment/chip labels, field labels */
+  --fs-body: 15px;      /* body, list-row titles, buttons */
+  --fs-headline: 17px;  /* sheet titles, emphasized row values, large buttons */
+  --fs-title-3: 20px;   /* "/ 7" denominators next to a hero, card titles */
+  --fs-title-2: 22px;   /* secondary stat, food item name in sheet */
+  --fs-title-1: 28px;   /* page title (26px at ≤360px) */
+  --fs-display: 34px;   /* secondary hero (e.g. kcal on Main's food card, wishlist total) */
+  --fs-hero: 48px;      /* the ONE number per screen */
+  --fs-input: 16px;     /* every input/select/textarea: iOS will not zoom */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; /* 800 retired */
+  --lh-tight: 1.05; --lh-snug: 1.25; --lh-body: 1.45;
+  --tracking-hero: -0.035em; --tracking-title: -0.022em; --tracking-body: -0.005em;
+  --tracking-eyebrow: 0.08em;  /* was 0.14–0.22em in 9 variants */
+
+  /* ---- Space (4pt grid) ---- */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-7: 28px; --space-8: 32px; --space-10: 40px;
+  --gutter: 16px;        /* page side gutter (20px ≥481px) */
+  --card-pad: 16px;      /* (20px ≥481px) */
+  --card-gap: 12px;      /* between stacked cards */
+  --section-gap: 28px;   /* above a section label */
+  --page-max: 640px;
+  --tap: 44px;           /* minimum hit target */
+
+  /* ---- Radii (5 values; replaces 13 in gym alone) ---- */
+  --radius-xs: 6px;      /* tiny inner marks only */
+  --radius-sm: 8px;      /* tiles, tags-in-rows, chart corners */
+  --radius-md: 12px;     /* fields, segmented control, inset groups, toast, large checkbox */
+  --radius-lg: 18px;     /* cards, grouped lists */
+  --radius-xl: 26px;     /* bottom-sheet top corners */
+  --radius-pill: 999px;  /* buttons, chips, tags, bars */
+
+  /* ---- Elevation (no glows anywhere) ---- */
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 24px 64px rgba(0, 0, 0, 0.60);
+  --shadow-porcelain: inset 0 1px 0 rgba(255, 255, 255, 0.70), 0 1px 2px rgba(0, 0, 0, 0.40), 0 6px 16px rgba(0, 0, 0, 0.30);
+  --blur-material: saturate(1.6) blur(20px);  /* chrome, sheets' scrim-free bars, toasts only */
+
+  /* ---- Motion ---- */
+  --dur-instant: 100ms;   /* press scale */
+  --dur-fast: 160ms;      /* colour/background changes */
+  --dur-base: 240ms;      /* toggles, fades, check pop, ticker crossfade */
+  --dur-slow: 360ms;      /* sheets, overlays */
+  --dur-progress: 600ms;  /* bar/ring fills */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* checkmark pop only */
+
+  /* ---- Layout & layers ---- */
+  --topbar-h: 52px;  --tabbar-h: 56px;
+  --z-chrome: 40; --z-session: 80; --z-sheet: 100; --z-viewer: 200; --z-toast: 250; --z-camera: 300;
+
+  /* ================= Legacy aliases =================
+     So existing rules adopt the system without renaming. */
+  --text-primary: var(--text-1);  --text-secondary: var(--text-2);
+  --text-tertiary: var(--text-3); --text-quaternary: var(--text-4);
+  --success: var(--positive); --danger: var(--negative);
+  --good: var(--positive); --warn: var(--warning); --bad: var(--negative); --info: var(--hue-health);
+  --bg-deep: var(--bg);
+  --bg-card: #111113;  /* opaque on purpose: gym/po-water also paint MODALS with --bg-card; visually = surface-1 on --bg */
+  --bg-secondary: var(--surface-2); --bg-input: var(--surface-2); --bg-input-focus: var(--surface-2);
+  --bg-dropdown: var(--bg-elevated);
+  --card: var(--surface-1); --field: var(--surface-2); --hair: var(--border); --border-soft: var(--hairline);
+  --glass-bg: var(--surface-1); --glass-border: transparent; --glass-border-strong: transparent;
+  --glass-shadow: var(--shadow-card);
+  --kcal: var(--hue-food);
+  --warning-bg: var(--warning-tint); --tag-stack: var(--warning); --tag-stack-bg: var(--warning-tint);
+  --accent-glow: transparent;
+  /* finance --radius-sm (8) / --radius-md (12) map 1:1; finance --radius-lg 16 → 18 */
 }
+@media (min-width: 481px) { :root { --gutter: 20px; --card-pad: 20px; } }
+@media (max-width: 360px) { :root { --fs-title-1: 26px; --fs-hero: 44px; } }
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-instant: 0ms; --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; --dur-progress: 0ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+  }
+}
+/* ===================== /row-tokens v1 ===================== */
+/* Food accent: porcelain. Macro hues (--protein/--carbs/--fat) are data colours, used only as dots, bars and rings. */
+:root {
+  --accent: var(--hue-food);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(244, 241, 234, 0.12);
+  --accent-ring: rgba(244, 241, 234, 0.60);
+}
+
+/* ---------- Base ---------- */
 * { box-sizing: border-box; }
 html, body {
-  margin: 0; padding: 0; background: #050506; color: var(--text-secondary);
-  font-family: var(--font); -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+  margin: 0; padding: 0; background: var(--bg); color: var(--text-2);
+  font: var(--fw-regular) var(--fs-body)/var(--lh-body) var(--font); letter-spacing: var(--tracking-body);
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
 }
-body { min-height: 100vh; position: relative; overflow-x: hidden; padding: 22px 20px 60px; }
+/* No body padding: topbar.js puts its full-bleed sticky bar first in <body> and reserves the tab bar with
+   body.has-bottombar; the gutter (and safe-area sides) live on .page. */
+body { min-height: 100vh; min-height: 100dvh; position: relative; overflow-x: hidden; }
 body.sheet-open { overflow: hidden; }
-body::before {
-  content: ''; position: fixed; inset: 0;
-  background:
-    radial-gradient(circle at 82% 14%, rgba(224,118,88,0.16), transparent 45%),
-    radial-gradient(circle at 18% 90%, rgba(180,180,200,0.06), transparent 50%);
-  filter: blur(40px); pointer-events: none; z-index: -2;
-  animation: drift 36s ease-in-out infinite alternate;
-}
-body::after {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1;
-  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px); background-size: 3px 3px;
-}
-@keyframes drift { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(-22px,14px,0); } }
-button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
-.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+button { font-family: inherit; color: inherit; }
+a, button, input, select, textarea, label, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+input, select, textarea { font-size: var(--fs-input); }
+:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+::selection { background: var(--accent-tint); color: var(--text-1); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.row-ic { display: block; flex-shrink: 0; width: 20px; height: 20px; }
+.row-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.page { max-width: 640px; margin: 0 auto; }
-.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.dash-title {
-  margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.025em;
-  background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+.page {
+  max-width: var(--page-max); margin: 0 auto;
+  padding: var(--space-3) calc(var(--gutter) + env(safe-area-inset-right)) var(--space-8) calc(var(--gutter) + env(safe-area-inset-left));
 }
-.sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; font-family: var(--font-mono); }
-.head-actions { display: flex; gap: 8px; align-items: center; }
-.pill-btn {
-  border: 1px solid var(--hair); background: var(--card); border-radius: 999px;
-  padding: 8px 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; color: var(--text-primary);
-}
-.pill-btn:active { transform: scale(0.96); }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); margin: var(--space-2) 0 var(--space-4); }
+.page-title { margin: 0; font: var(--fw-bold) var(--fs-title-1)/1.1 var(--font-display); letter-spacing: var(--tracking-title); color: var(--text-1); }
+.page-sub { margin-top: var(--space-1); font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font-mono); color: var(--text-3); }
+.head-actions { display: flex; gap: var(--space-2); align-items: center; }
+.head-actions .btn { position: relative; }
+.head-actions .btn::after { content: ''; position: absolute; inset: -4px 0; }
 
-/* Cards */
-.card {
-  background: var(--card); border-radius: 16px; padding: 18px;
-  backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.45); margin-bottom: 12px;
-}
-.eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-tertiary); }
-.hair { height: 1px; background: var(--hair); margin: 14px 0; }
+/* ---------- Cards, lists, labels ---------- */
+.card { position: relative; margin: 0 0 var(--card-gap); padding: var(--card-pad); border: 0; border-radius: var(--radius-lg); background: var(--surface-1); box-shadow: var(--shadow-card); }
+.card--hero { padding: var(--space-5); }
+.list { margin: 0 0 var(--card-gap); border-radius: var(--radius-lg); background: var(--surface-1); box-shadow: var(--shadow-card); overflow: hidden; }
+.eyebrow { display: block; margin: 0 0 var(--space-2); font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font); letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--text-3); }
+.eyebrow.is-over { color: var(--negative); }
+.section-label { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin: var(--section-gap) var(--space-1) var(--space-2); font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font); letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--text-3); }
+.meta { font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-2); }
+.meta.is-over { color: var(--negative); }
+.group-label { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin: 0 var(--space-1); font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font); letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--text-3); }
+.group-label .meta { font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono); letter-spacing: 0; text-transform: none; color: var(--text-3); }
+.hair { height: 1px; margin: var(--space-4) 0; background: var(--hairline); }
+.row-stack { display: flex; flex-direction: column; gap: var(--space-4); }
+.row-group { display: flex; flex-direction: column; gap: var(--space-2); }
 
-/* Week strip */
-.week { display: flex; align-items: center; gap: 2px; margin-bottom: 12px; touch-action: pan-y; }
-.week-arrow { width: 26px; height: 44px; border: 0; background: none; color: var(--text-tertiary); font-size: 18px; cursor: pointer; border-radius: 8px; }
-.week-arrow:hover { color: var(--text-primary); }
-.week-cells { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); }
-.wcell { border: 0; background: none; padding: 6px 0 4px; border-radius: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.wcell.sel { background: rgba(255,255,255,0.07); }
-.wcell .dow { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); }
-.wcell.sel .dow { color: var(--text-primary); }
-.wring { position: relative; width: 36px; height: 36px; }
-.wring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.wring .t { fill: none; stroke: rgba(255,255,255,0.07); stroke-width: 3.5; }
-.wring .p { fill: none; stroke: var(--kcal); stroke-width: 3.5; stroke-linecap: round; transition: stroke-dashoffset .5s cubic-bezier(.22,1,.36,1); }
-.wring .p.over { stroke: var(--danger); }
-.wring span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); }
-.wcell.today:not(.sel) .wring span { color: #E07658; }
-.wcell.future .wring span { color: var(--text-tertiary); }
+/* ---------- Buttons ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--tap); padding: 0 var(--space-5); border: 0; border-radius: var(--radius-pill); font: var(--fw-semibold) var(--fs-body)/1 var(--font); letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer; transition: transform var(--dur-instant) var(--ease-out), background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; pointer-events: none; }
+.btn .row-ic { width: 18px; height: 18px; stroke-width: 2; }
+.btn--primary { background: var(--porcelain-fill); color: var(--text-on-light); font-weight: var(--fw-bold); box-shadow: var(--shadow-porcelain); }
+.btn--secondary { background: var(--surface-3); color: var(--text-1); }
+.btn--accent { background: var(--accent-tint); color: var(--accent); }
+.btn--block { width: 100%; }
+.btn--lg { min-height: 52px; padding: 0 var(--space-6); font-size: var(--fs-headline); }
+.btn--sm { min-height: 36px; padding: 0 14px; font-size: var(--fs-footnote); }
+.btn--sm .row-ic { width: 16px; height: 16px; }
+.icon-btn { position: relative; display: inline-grid; place-items: center; flex-shrink: 0; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text-2); cursor: pointer; transition: background-color var(--dur-fast), transform var(--dur-instant) var(--ease-out); }
+.icon-btn:active { transform: scale(0.94); background: var(--surface-3); }
+.icon-btn--plain { background: transparent; color: var(--text-3); }
+.icon-btn[aria-pressed="true"] { color: var(--accent); }
+.icon-btn.row-danger { color: var(--negative); }
+/* Round "+" (meal add, quick add, portion stepper). */
+.circle { display: grid; place-items: center; flex-shrink: 0; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: var(--surface-2); color: var(--text-1); cursor: pointer; transition: background-color var(--dur-fast), transform var(--dur-instant) var(--ease-out); }
+.circle:active { transform: scale(0.94); background: var(--surface-3); }
+.circle.done { background: var(--accent-tint); color: var(--accent); }
 
-/* Hero */
-.hero { position: relative; overflow: hidden; }
-.hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 90% at 0% 0%, rgba(224,118,88,0.12), transparent 70%); pointer-events: none; }
-.hero > * { position: relative; }
-.hero-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.icon-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--hair); background: var(--field); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; color: var(--text-secondary); }
-.icon-btn:active { transform: scale(0.92); }
-.big { background: none; border: 0; padding: 0; cursor: pointer; display: block; text-align: left; }
-.big .n { font-size: 48px; font-weight: 800; letter-spacing: -0.04em; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
-.big .u { font-size: 14px; font-weight: 600; color: var(--text-tertiary); margin-left: 6px; letter-spacing: 0; }
-.bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; margin: 14px 0 10px; }
-.bar > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #C7C4BC, #FFFFFF); box-shadow: 0 0 12px rgba(255,255,255,0.25); transition: width .6s cubic-bezier(.22,1,.36,1); }
-.bar.over > i { background: linear-gradient(90deg, #FF9A9A, var(--danger)); box-shadow: 0 0 12px rgba(255,107,107,0.4); }
-.meta { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); }
-.macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.mac .lab { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
-.mac .dot { width: 6px; height: 6px; border-radius: 50%; }
-.mac .val { margin-top: 5px; font-size: 16px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mac .val small { font-size: 11px; font-weight: 500; color: var(--text-tertiary); }
-.mac .mbar { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.07); margin-top: 7px; overflow: hidden; }
-.mac .mbar > i { display: block; height: 100%; border-radius: inherit; transition: width .6s cubic-bezier(.22,1,.36,1); }
+/* ---------- Week strip ---------- */
+/* The arrows reach 12px into the page gutter so they get full 44px targets without shrinking the day cells. */
+.week { display: flex; align-items: center; margin: 0 -12px var(--space-4); touch-action: pan-y; }
+.week-arrow { display: grid; place-items: center; flex-shrink: 0; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: var(--radius-pill); background: none; color: var(--text-3); cursor: pointer; transition: background-color var(--dur-fast); }
+.week-arrow:active { background: var(--surface-2); }
+.week-cells { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.wcell { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 6px 0 8px; border: 0; border-radius: var(--radius-md); background: none; cursor: pointer; transition: background-color var(--dur-fast); }
+.wcell.sel { background: var(--surface-2); }
+.wcell .dow { font: var(--fw-semibold) var(--fs-micro)/1 var(--font); color: var(--text-3); }
+.wcell.sel .dow, .wcell.today .dow { color: var(--text-1); }
+.wring { position: relative; display: block; width: min(36px, 100%); aspect-ratio: 1; }
+.wring svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.wring .t { fill: none; stroke: var(--track); stroke-width: 3; }
+.wring .p { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset var(--dur-progress) var(--ease-out); }
+.wring .p.over { stroke: var(--negative); }
+.wring .p.zero { stroke: none; }
+.wring span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: var(--fw-semibold) var(--fs-caption)/1 var(--font-mono); color: var(--text-2); }
+.wcell.sel .wring span { color: var(--text-1); }
+.wcell.future .wring span { color: var(--text-3); }
+.wcell::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: transparent; }
+.wcell.today::after { background: var(--accent); }
 
-/* Meals */
-.section-title { font-size: 10.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-tertiary); display: flex; align-items: center; gap: 12px; margin: 20px 0 10px; }
-.section-title::before { content: ''; width: 18px; height: 1px; background: var(--text-tertiary); opacity: .6; }
-.section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent); }
-.meals { padding: 4px 0; }
-.meal + .meal { border-top: 1px solid var(--hair); }
-.meal-head { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
-.meal-main { flex: 1; display: flex; align-items: center; gap: 12px; padding: 10px 0 10px 14px; background: none; border: 0; text-align: left; cursor: pointer; min-height: 60px; }
-.tile { width: 34px; height: 34px; border-radius: 10px; background: var(--field); display: inline-flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
-.meal-name { font-size: 15.5px; font-weight: 700; color: var(--text-primary); }
-.meal-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; font-family: var(--font-mono); white-space: nowrap; }
-@media (max-width: 480px) { .meal-sub { font-size: 10.5px; } .meal-main { padding-left: 10px; gap: 10px; } .entry { padding-left: 56px; } .copy-row { padding-left: 56px; } }
-.meal-sub.has { color: var(--text-secondary); }
-.circle { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--field); color: var(--text-primary); font-size: 20px; line-height: 1; cursor: pointer; flex-shrink: 0; }
-.circle:active { transform: scale(0.92); }
-.circle.ghost { background: none; color: var(--text-tertiary); font-size: 18px; }
-.entry { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 16px 9px 60px; background: none; border: 0; border-top: 1px solid rgba(255,255,255,0.05); text-align: left; cursor: pointer; min-height: 54px; }
-.entry:hover { background: rgba(255,255,255,0.025); }
-.entry .nm { font-size: 14.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.entry .am { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; font-family: var(--font-mono); }
+/* ---------- Hero ---------- */
+.big { display: inline-flex; align-items: baseline; margin-top: var(--space-1); padding: 0; border: 0; background: none; text-align: left; cursor: pointer; }
+.big .n { font: var(--fw-bold) var(--fs-hero)/var(--lh-tight) var(--font-display); letter-spacing: var(--tracking-hero); font-variant-numeric: tabular-nums; color: var(--text-1); }
+.big .u { margin-left: 6px; font: var(--fw-medium) var(--fs-body)/1 var(--font); letter-spacing: 0; color: var(--text-3); }
+.bar { position: relative; height: 6px; border-radius: var(--radius-pill); background: var(--track); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width var(--dur-progress) var(--ease-out); }
+.bar--lg { height: 10px; }
+.bar--thin { height: 4px; }
+.bar.over > i { background: var(--negative); }
+.hero .bar--lg { margin: var(--space-4) 0 var(--space-2); }
+.macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.mac .lab { display: flex; align-items: center; gap: 6px; font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font); letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--text-3); }
+.mac .dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; }
+.mac .val { margin-top: var(--space-1); font: var(--fw-semibold) var(--fs-headline)/1.2 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); white-space: nowrap; }
+.mac .val small { margin-left: 3px; font: var(--fw-medium) var(--fs-caption) var(--font); color: var(--text-3); }
+.mac .bar { margin-top: var(--space-2); }
+
+/* ---------- Meals ---------- */
+.meal + .meal { box-shadow: inset 0 1px 0 var(--hairline); }
+.meal-head { display: flex; align-items: center; gap: var(--space-1); padding-right: var(--space-2); }
+.meal-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-3); min-height: 64px; padding: 10px 0 10px var(--space-4); border: 0; background: none; text-align: left; cursor: pointer; }
+.meal-main > span:last-child { flex: 1; min-width: 0; }
+.row-tile { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); }
+.row-tile .row-ic { width: 18px; height: 18px; }
+.meal-name { display: block; font: var(--fw-semibold) var(--fs-headline)/1.25 var(--font); color: var(--text-1); }
+/* Compact "578 kcal · P 39 C 89 F 13"; on a narrow phone it wraps a token to a second line rather than hiding fat. */
+.meal-sub { display: block; margin-top: 2px; font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-3); }
+.meal-sub.has { color: var(--text-2); }
+/* Entries indent 60px (16 padding + 32 tile + 12 gap) so their names sit under the meal names. */
+.entry { position: relative; display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 56px; padding: 10px var(--space-4) 10px 60px; border: 0; background: none; text-align: left; cursor: pointer; transition: background-color var(--dur-fast); }
+.entry::before { content: ''; position: absolute; top: 0; left: 60px; right: 0; height: 1px; background: var(--hairline); }
+.entry:active { background: var(--surface-2); }
 .entry .l { flex: 1; min-width: 0; }
-.entry .kc { font-size: 15px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); white-space: nowrap; }
-.entry .kc small { font-size: 10px; font-weight: 500; color: var(--text-tertiary); margin-left: 2px; }
-.copy-row { display: block; width: 100%; padding: 11px 16px 11px 60px; background: none; border: 0; border-top: 1px solid rgba(255,255,255,0.05); text-align: left; cursor: pointer; font-size: 13.5px; font-weight: 600; color: #E9C9BE; }
-.copy-row span { color: var(--text-tertiary); font-family: var(--font-mono); font-weight: 500; font-size: 12px; }
+.entry .nm { display: block; font: var(--fw-medium) var(--fs-body)/1.3 var(--font); color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry .am { display: block; margin-top: 2px; font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry .kc, .row-main .kc { flex-shrink: 0; font: var(--fw-semibold) var(--fs-body)/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); white-space: nowrap; }
+.entry .kc small, .row-main .kc small { margin-left: 3px; font: var(--fw-medium) var(--fs-micro) var(--font); color: var(--text-3); }
+.entry.is-new { animation: row-new 1.4s var(--ease-out) 1; }
+@keyframes row-new { 0%, 30% { background: var(--accent-tint); } 100% { background: transparent; } }
+.copy-row { position: relative; display: flex; align-items: center; gap: var(--space-3); min-height: 52px; padding: 8px var(--space-4) 8px 60px; }
+.copy-row::before { content: ''; position: absolute; top: 0; left: 60px; right: 0; height: 1px; background: var(--hairline); }
+.copy-row .btn { position: relative; }
+.copy-row .btn::after { content: ''; position: absolute; inset: -4px 0; }
+.row-meta { font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-3); }
 
-/* Sheets */
-.sheet-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0); display: flex; align-items: flex-end; justify-content: center; transition: background .25s; }
-.sheet-overlay.in { background: rgba(0,0,0,0.55); }
-.sheet-overlay.under { visibility: hidden; }
+/* ---------- Sheets ---------- */
+.sheet-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(0, 0, 0, 0); transition: background-color var(--dur-base) var(--ease-out); overscroll-behavior: contain; }
+.sheet-overlay.in { background: rgba(0, 0, 0, 0.55); }
+.sheet-overlay.out { background: rgba(0, 0, 0, 0); pointer-events: none; }
 .sheet {
-  width: 100%; max-width: 560px; max-height: 92vh; max-height: 92dvh; display: flex; flex-direction: column;
-  background: #101012; border: 1px solid var(--hair); border-bottom: 0; border-radius: 26px 26px 0 0;
-  box-shadow: 0 -20px 60px rgba(0,0,0,0.6);
-  transform: translateY(40px); opacity: 0; transition: transform .3s cubic-bezier(.22,1,.36,1), opacity .2s;
+  display: flex; flex-direction: column; width: 100%; max-width: 560px;
+  max-height: calc(100vh - 52px); max-height: calc(100dvh - max(44px, env(safe-area-inset-top)) - 8px);
+  border: 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--bg-elevated); box-shadow: var(--shadow-raised);
+  transform: translateY(100%); transition: transform var(--dur-slow) var(--ease-sheet), filter var(--dur-slow) var(--ease-sheet);
 }
-.sheet-overlay.in .sheet { transform: none; opacity: 1; }
-.sheet-grab { width: 38px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.18); margin: 8px auto 0; }
-.sheet-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px 10px; }
-.sheet-head h2 { flex: 1; margin: 0; font-size: 17px; font-weight: 700; color: var(--text-primary); text-align: center; }
-.sheet-head .sheet-x, .sheet-head .sheet-right { width: 90px; display: flex; }
-.sheet-head .sheet-x { justify-content: flex-start; }
-.sheet-head .sheet-right { justify-content: flex-end; }
-.sheet-x button { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--field); color: var(--text-secondary); cursor: pointer; font-size: 13px; }
-.sheet-body { overflow-y: auto; padding: 4px 16px 20px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch; }
-.sheet-foot { padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--hair); background: #101012; }
+.sheet-overlay.in .sheet { transform: none; }
+.sheet-overlay.out .sheet { transform: translateY(100%); }
+/* A sheet with a sheet on top stays visible, pushed back behind the top sheet's scrim. */
+.sheet-overlay.under { background: transparent; pointer-events: none; }
+.sheet-overlay.under .sheet { transform: translateY(-8px) scale(0.94); filter: brightness(0.7); }
+/* Fixed height, so typing or switching tabs never moves the search field under the finger. */
+.row-sheet-tall { height: calc(100vh - 52px); height: calc(100dvh - max(44px, env(safe-area-inset-top)) - 8px); }
+.sheet-grab { flex-shrink: 0; width: 36px; height: 5px; margin: 6px auto 0; border-radius: 3px; background: rgba(255, 255, 255, 0.22); }
+.sheet-head { flex-shrink: 0; display: grid; grid-template-columns: minmax(64px, 1fr) minmax(0, auto) minmax(64px, 1fr); column-gap: var(--space-2); align-items: center; min-height: 52px; padding: 0 var(--space-2); }
+.sheet-head h2 { margin: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: var(--fw-semibold) var(--fs-headline)/1.2 var(--font); color: var(--text-1); }
+.sheet-x, .sheet-right { display: flex; align-items: center; min-width: 0; }
+.sheet-right { justify-content: flex-end; }
+.sheet-x button { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; background: none; color: var(--text-2); cursor: pointer; }
+.sheet-x button > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--surface-3); transition: background-color var(--dur-fast); }
+.sheet-x button:active > span { background: var(--surface-active); }
+.sheet-x .row-ic { width: 16px; height: 16px; stroke-width: 2.2; }
+.row-sheet-sub { flex-shrink: 0; display: flex; flex-direction: column; gap: var(--space-3); padding: 0 var(--gutter) var(--space-3); border-bottom: 1px solid var(--hairline); }
+.sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-1) var(--gutter) var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); -webkit-overflow-scrolling: touch; }
+.row-sheet-sub + .sheet-body { padding-top: var(--space-4); }
+.row-no-foot .sheet-body { padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom)); }
+.sheet-foot { flex-shrink: 0; padding: var(--space-3) var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom)); border-top: 1px solid var(--hairline); background: var(--bg-elevated); }
 .sheet-foot:empty { display: none; }
-.sel-pill { appearance: none; -webkit-appearance: none; background: var(--field); border: 1px solid var(--hair); color: var(--text-primary); border-radius: 999px; padding: 7px 28px 7px 12px; font-size: 16px; font-weight: 700; font-family: inherit;
-  background-image: linear-gradient(45deg, transparent 50%, #76746E 50%), linear-gradient(135deg, #76746E 50%, transparent 50%); background-position: calc(100% - 15px) 14px, calc(100% - 10px) 14px; background-size: 5px 5px; background-repeat: no-repeat; }
-.sel-pill option { background: #101012; }
-
-.field { width: 100%; background: var(--field); border: 1px solid transparent; border-radius: 12px; padding: 12px 14px; color: var(--text-primary); font-size: 16px; font-family: inherit; outline: none; }
-.field:focus { border-color: rgba(255,255,255,0.28); }
-.field::placeholder { color: var(--text-tertiary); }
-.search { position: relative; }
-.search::before { content: '⌕'; position: absolute; left: 13px; top: 50%; transform: translateY(-52%); font-size: 18px; color: var(--text-tertiary); }
-.search .field { padding-left: 36px; }
-.shortcuts { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.shortcut { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--hair); border-radius: 14px; padding: 10px 12px; cursor: pointer; text-align: left; min-height: 56px; }
-.shortcut b { display: block; font-size: 14px; color: var(--text-primary); }
-.shortcut small { font-size: 11px; color: var(--text-tertiary); }
-.seg { display: flex; background: var(--field); border-radius: 12px; padding: 3px; gap: 2px; }
-.seg button { flex: 1; border: 0; background: none; padding: 8px 4px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
-.seg button.on { background: rgba(255,255,255,0.14); color: var(--text-primary); }
-.group-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-tertiary); padding: 0 4px; display: flex; align-items: center; gap: 8px; }
-.rows { background: var(--card); border-radius: 14px; overflow: hidden; }
-.row { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 14px; min-height: 58px; border-top: 1px solid rgba(255,255,255,0.05); }
-.row:first-child { border-top: 0; }
-.row-main { flex: 1; min-width: 0; background: none; border: 0; text-align: left; padding: 9px 0; cursor: pointer; }
-.row-main .nm { font-size: 14.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-main .hd { font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-main .mc { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; font-family: var(--font-mono); }
-.circle.done { background: rgba(107,227,164,0.2); color: var(--success); }
-.empty { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--text-tertiary); font-style: italic; background: var(--card); border-radius: 14px; }
-.note { font-size: 12px; color: var(--text-tertiary); padding: 0 4px; }
-.plate { display: flex; align-items: center; gap: 12px; }
-.plate .l { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-tertiary); }
-.plate .v { font-size: 18px; font-weight: 800; color: var(--text-primary); font-family: var(--font-mono); }
-.plate .v small { font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
-.plate .m { flex: 1; text-align: center; font-size: 11.5px; color: var(--text-secondary); font-family: var(--font-mono); }
-.btn { border: 0; border-radius: 999px; padding: 12px 22px; font-size: 14px; font-weight: 700; cursor: pointer; background: var(--field); color: var(--text-primary); }
-.btn.cta { width: 100%; padding: 15px; font-size: 15px; background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%); color: #0A0A0B; box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 8px 24px rgba(0,0,0,0.4); }
-.btn.cta:active { transform: scale(0.985); }
-.btn.danger { color: var(--danger); }
-
-/* Food sheet */
-.f-title { font-size: 22px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; padding: 0 4px; }
-.f-src { font-size: 12px; color: var(--text-tertiary); padding: 0 4px; margin-top: -8px; }
-.nrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); border-radius: 16px; padding: 14px 16px; }
-.nrow .kc { font-size: 36px; font-weight: 800; letter-spacing: -0.04em; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
-.nrow .kc small { font-size: 13px; font-weight: 600; color: var(--text-tertiary); margin-left: 4px; letter-spacing: 0; }
-.mrings { display: flex; gap: 12px; }
-.mring { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.mring .r { position: relative; width: 44px; height: 44px; }
-.mring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.mring .t { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 5; }
-.mring .p { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .4s; }
-.mring .r span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
-.mring .g { font-size: 13px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); }
-.mring .g small { font-size: 10px; color: var(--text-tertiary); font-weight: 500; }
-.mring .nmz { font-size: 10px; color: var(--text-secondary); margin-top: -4px; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { border: 1px solid var(--hair); background: var(--card); color: var(--text-secondary); border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
-.chip.on { background: rgba(255,255,255,0.16); color: var(--text-primary); border-color: rgba(255,255,255,0.25); }
-.stepper { display: flex; align-items: center; gap: 8px; }
-.stepper .circle { width: 50px; height: 50px; font-size: 22px; }
-.amt { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--field); border-radius: 14px; min-height: 54px; padding: 0 12px; }
-.amt input { width: 90px; background: none; border: 0; outline: none; text-align: center; font-size: 28px; font-weight: 800; color: var(--text-primary); font-family: inherit; font-variant-numeric: tabular-nums; }
-.amt span { font-size: 13px; color: var(--text-secondary); }
-.proj { font-size: 12.5px; color: var(--text-secondary); font-family: var(--font-mono); padding: 0 4px; }
-.form-card { background: var(--card); border-radius: 14px; overflow: hidden; }
-.frow { display: flex; align-items: center; gap: 10px; padding: 0 14px; min-height: 50px; border-top: 1px solid rgba(255,255,255,0.05); }
-.frow:first-child { border-top: 0; }
-.frow label { flex: 1; font-size: 14px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
-.frow input[type=text], .frow input[type=number], .frow input[inputmode] { width: 110px; text-align: right; background: none; border: 0; outline: none; color: var(--text-primary); font-size: 16px; font-family: var(--font-mono); padding: 12px 0; }
-.frow input.wide { width: 170px; font-family: var(--font); }
-.frow .unit { font-size: 12px; color: var(--text-tertiary); width: 30px; }
-.frow .dot { width: 8px; height: 8px; border-radius: 50%; }
-.switch { position: relative; width: 44px; height: 26px; border-radius: 999px; background: rgba(255,255,255,0.14); border: 0; cursor: pointer; transition: background .2s; flex-shrink: 0; }
-.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; }
-.switch.on { background: var(--success); }
-.switch.on::after { transform: translateX(18px); }
-.menu-list { background: var(--card); border-radius: 14px; overflow: hidden; }
-.menu-list button { display: block; width: 100%; padding: 15px 16px; text-align: left; font-size: 15px; font-weight: 600; background: none; border: 0; border-top: 1px solid rgba(255,255,255,0.05); color: var(--text-primary); cursor: pointer; }
-.menu-list button:first-child { border-top: 0; }
-
-/* Toast */
-.toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0; z-index: 200;
-  display: flex; align-items: center; gap: 14px; background: rgba(32,32,36,0.96); border: 1px solid var(--hair); border-radius: 14px; padding: 11px 16px; font-size: 13.5px; color: var(--text-primary);
-  box-shadow: 0 14px 40px rgba(0,0,0,0.55); transition: transform .3s cubic-bezier(.22,1,.36,1), opacity .2s; max-width: calc(100vw - 32px); }
-.toast.in { transform: translate(-50%, 0); opacity: 1; }
-.toast button { border: 0; background: none; color: #E9C9BE; font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 0; }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+.sel-pill {
+  -webkit-appearance: none; appearance: none; width: 100%; max-width: 150px; min-width: 0; min-height: var(--tap); padding: 0 34px 0 14px;
+  border: 0; border-radius: var(--radius-pill); background-color: var(--surface-3); color: var(--text-1);
+  font: var(--fw-semibold) var(--fs-input)/1 var(--font); text-overflow: ellipsis; cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%23B8B6B0' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 12px center;
 }
-@media (max-width: 480px) {
-  body { padding: 16px 14px 50px; }
-  .dash-title { font-size: 22px; }
-  .big .n { font-size: 42px; }
-  .card { padding: 16px; }
-  .mac .val { font-size: 14px; }
+.sel-pill option { background: var(--bg-elevated); color: var(--text-1); }
+
+/* ---------- Fields, segments, chips ---------- */
+.field { width: 100%; min-height: 48px; padding: 12px 14px; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-1); font: var(--fw-regular) var(--fs-input)/1.25 var(--font); caret-color: var(--accent); outline: none; -webkit-appearance: none; appearance: none; transition: border-color var(--dur-fast) var(--ease-out); }
+.field::placeholder { color: var(--text-3); }
+.field:focus { border-color: var(--accent-ring); }
+.field--num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.field-help { margin: calc(-1 * var(--space-2)) var(--space-1) 0; font: var(--fw-regular) var(--fs-caption)/1.4 var(--font); color: var(--text-3); }
+.row-group > .field-help, .group-label + .field-help { margin-top: 0; }
+.field-help.mono { font-family: var(--font-mono); }
+.field-help.is-error { color: var(--negative); }
+.field-help.is-warn { color: var(--warning); }
+.field-help .btn { position: relative; margin-left: var(--space-2); vertical-align: middle; }
+.field-help .btn::after { content: ''; position: absolute; inset: -4px 0; }
+.search { position: relative; }
+.search > .row-ic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-3); pointer-events: none; }
+.search .field { padding-left: 42px; padding-right: 48px; }
+.search .row-scan { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); }
+.search .row-scan:active { transform: translateY(-50%) scale(0.94); }
+/* Buttons fill the control's full 44px height (the 3px rim above and below is theirs to tap too); the 38px
+   pill is drawn by ::before, so it looks the same as a 3px-padded segment. */
+.seg { display: flex; gap: 2px; padding: 0 3px; border-radius: var(--radius-md); background: var(--surface-2); }
+.seg > button { position: relative; z-index: 0; flex: 1; min-width: 0; min-height: var(--tap); padding: 0 6px; border: 0; border-radius: 9px; background: transparent; color: var(--text-2); font: var(--fw-semibold) var(--fs-footnote)/1 var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: color var(--dur-fast); }
+.seg > button::before { content: ''; position: absolute; inset: 3px 0; z-index: -1; border-radius: 9px; transition: background-color var(--dur-fast); }
+.seg > button.on { color: var(--text-1); }
+.seg > button.on::before { background: var(--surface-active); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+.row-seg-inline { width: 176px; flex-shrink: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: 0; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text-2); font: var(--fw-semibold) var(--fs-footnote)/1 var(--font); cursor: pointer; transition: background-color var(--dur-fast), color var(--dur-fast); }
+.chip::after { content: ''; position: absolute; inset: -4px 0; }
+.chip.on { background: var(--accent-tint); color: var(--accent); box-shadow: inset 0 0 0 1px var(--border-strong); }
+
+/* ---------- Add sheet ---------- */
+.rows { border-radius: var(--radius-lg); background: var(--surface-1); overflow: hidden; }
+.row { position: relative; display: flex; align-items: center; gap: var(--space-1); min-height: 60px; padding-right: var(--space-2); }
+.row + .row::before { content: ''; position: absolute; top: 0; left: var(--space-4); right: 0; height: 1px; background: var(--hairline); }
+.row-main { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: var(--space-3); padding: 10px var(--space-2) 10px var(--space-4); border: 0; background: none; text-align: left; cursor: pointer; transition: background-color var(--dur-fast); }
+.row-main:active { background: var(--surface-2); }
+.row-main .l { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row-main .nm { font: var(--fw-semibold) var(--fs-body)/1.3 var(--font); color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-main .hd { margin-top: 2px; font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono); color: var(--text-3); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.empty { padding: var(--space-7) var(--space-5); border-radius: var(--radius-lg); background: var(--surface-1); text-align: center; }
+.empty-title { font: var(--fw-semibold) var(--fs-body)/1.3 var(--font); color: var(--text-1); }
+.empty-body { max-width: 32ch; margin: var(--space-1) auto 0; font: var(--fw-regular) var(--fs-footnote)/var(--lh-body) var(--font); color: var(--text-3); }
+.empty .btn { margin-top: var(--space-4); }
+.plate { display: flex; align-items: center; gap: var(--space-3); }
+.plate .l { font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font); letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+.plate .l.is-over { color: var(--negative); }
+.plate .v { margin-top: 2px; font: var(--fw-semibold) var(--fs-headline)/1.2 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); white-space: nowrap; }
+.plate .v small { margin-left: 2px; font: var(--fw-medium) var(--fs-caption) var(--font); color: var(--text-3); }
+.plate .m { flex: 1; min-width: 0; text-align: center; font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-3); }
+
+/* ---------- Food sheet ---------- */
+.f-title { padding: 0 var(--space-1); font: var(--fw-bold) var(--fs-title-2)/1.2 var(--font-display); letter-spacing: var(--tracking-title); color: var(--text-1); overflow-wrap: anywhere; }
+.f-src { margin-top: calc(-1 * var(--space-3)); padding: 0 var(--space-1); font: var(--fw-regular) var(--fs-caption)/1.3 var(--font); color: var(--text-3); }
+.nrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-md); background: var(--surface-2); }
+.nrow .kc { font: var(--fw-bold) var(--fs-display)/var(--lh-tight) var(--font-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--text-1); white-space: nowrap; }
+.nrow .kc small { margin-left: 4px; font: var(--fw-medium) var(--fs-footnote) var(--font); letter-spacing: 0; color: var(--text-3); }
+.mrings { display: flex; gap: var(--space-3); }
+.mring { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.mring .r { position: relative; width: 48px; height: 48px; }
+.mring svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.mring .t { fill: none; stroke: var(--track); stroke-width: 3.5; }
+.mring .p { fill: none; stroke-width: 3.5; stroke-linecap: round; transition: stroke-dashoffset var(--dur-base) var(--ease-out); }
+.mring .r span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: var(--fw-semibold) var(--fs-caption)/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); }
+.mring .r span small { margin-left: 1px; font-size: var(--fs-micro); color: var(--text-3); }
+.mring .nmz { font: var(--fw-medium) var(--fs-micro)/1 var(--font); color: var(--text-3); }
+.stepper { display: flex; align-items: center; gap: var(--space-2); }
+.stepper .circle { width: 52px; height: 52px; background: var(--surface-3); }
+.stepper .circle:active { background: var(--surface-active); }
+.amt { flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: center; gap: 6px; min-height: 56px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: var(--radius-md); background: var(--surface-2); cursor: text; transition: border-color var(--dur-fast); }
+.amt:focus-within { border-color: var(--accent-ring); }
+.amt input { width: 5ch; min-width: 0; padding: 12px 0; border: 0; outline: none; background: none; text-align: right; font: var(--fw-semibold) var(--fs-title-1)/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); caret-color: var(--accent); }
+.amt span { max-width: 45%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: var(--fw-medium) var(--fs-footnote) var(--font); color: var(--text-2); }
+.row-portion-help { padding: 0 var(--space-1); font: var(--fw-regular) var(--fs-caption)/1.4 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-3); }
+.row-foot-proj { margin: 0 0 var(--space-2); text-align: center; font: var(--fw-medium) var(--fs-caption)/1.3 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-2); }
+.row-foot-proj.is-over { color: var(--negative); }
+
+/* ---------- Form rows (targets, manual, weight), switch, menu ---------- */
+.form-card { border-radius: var(--radius-lg); background: var(--surface-1); overflow: hidden; }
+.frow { display: flex; align-items: center; gap: var(--space-3); min-height: 50px; padding: 0 var(--space-4); }
+.frow + .frow { box-shadow: inset 0 1px 0 var(--hairline); }
+.frow label { flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: var(--space-2); font: var(--fw-regular) var(--fs-body)/1.3 var(--font); color: var(--text-1); cursor: pointer; }
+.frow input[type=text], .frow input[type=number], .frow input[inputmode] { width: 120px; min-width: 0; padding: 12px 0; border: 0; outline: none; background: none; text-align: right; font: var(--fw-regular) var(--fs-input) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); caret-color: var(--accent); }
+.frow input.wide { width: 170px; font-family: var(--font); }
+.frow input::placeholder { color: var(--text-3); font-family: var(--font); }
+.frow .unit { width: 32px; flex-shrink: 0; font: var(--fw-medium) var(--fs-footnote) var(--font); color: var(--text-3); }
+.frow .dot { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; }
+.switch { position: relative; flex-shrink: 0; width: 51px; height: 31px; padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--surface-active); cursor: pointer; transition: background-color var(--dur-fast); }
+.switch::before { content: ''; position: absolute; inset: -7px -6px; }   /* 45px hit area; ::after is the knob */
+.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); transition: transform var(--dur-base) var(--ease-out); }
+.switch.on { background: var(--accent); }
+.switch.on::after { transform: translateX(20px); background: var(--accent-ink); }
+.menu-list { border-radius: var(--radius-lg); background: var(--surface-1); overflow: hidden; }
+.menu-list button { position: relative; display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 52px; padding: 0 var(--space-4); border: 0; background: none; text-align: left; font: var(--fw-medium) var(--fs-body)/1.3 var(--font); color: var(--text-1); cursor: pointer; transition: background-color var(--dur-fast); }
+.menu-list button + button::before { content: ''; position: absolute; top: 0; left: 48px; right: 0; height: 1px; background: var(--hairline); }
+.menu-list button:active { background: var(--surface-2); }
+.menu-list .row-ic { color: var(--text-2); }
+
+/* ---------- Toast ---------- */
+/* Hidden toast never takes taps (pointer-events), so a stale Undo can't fire under the finger. */
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); z-index: var(--z-toast);
+  display: flex; align-items: center; gap: var(--space-4); width: max-content; min-height: 48px; max-width: calc(100vw - 2 * var(--gutter));
+  padding: 0 var(--space-1) 0 var(--space-4); border: 1px solid var(--border); border-radius: 14px; background: rgba(38, 38, 42, 0.92);
+  -webkit-backdrop-filter: var(--blur-material); backdrop-filter: var(--blur-material); box-shadow: var(--shadow-raised);
+  color: var(--text-1); font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font);
+  opacity: 0; transform: translate(-50%, 8px); pointer-events: none;
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+.toast.in { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast > span { min-width: 0; padding: 7px 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.toast > span:last-child { padding-right: var(--space-3); }
+.toast button { flex-shrink: 0; min-height: var(--tap); padding: 0 var(--space-3); border: 0; background: none; color: var(--accent); font: var(--fw-semibold) var(--fs-footnote) var(--font); cursor: pointer; }
+
+@media (max-width: 360px) {
+  .mac .val { font-size: var(--fs-body); }
+  .mring .r { width: 40px; height: 40px; }
+  .mrings { gap: var(--space-2); }
 }
 </style>
 </head>
@@ -268,10 +472,10 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   'use strict';
   const LS_KEY = 'food_v1';
   const MEALS = [
-    { id: 'breakfast', label: 'Breakfast', icon: '🌅' },
-    { id: 'lunch',     label: 'Lunch',     icon: '☀️' },
-    { id: 'dinner',    label: 'Dinner',    icon: '🌙' },
-    { id: 'snacks',    label: 'Snacks',    icon: '🥕' }
+    { id: 'breakfast', label: 'Breakfast', icon: 'sunrise' },
+    { id: 'lunch',     label: 'Lunch',     icon: 'sun' },
+    { id: 'dinner',    label: 'Dinner',    icon: 'moon' },
+    { id: 'snacks',    label: 'Snacks',    icon: 'apple' }
   ];
   const DEFAULTS = { targets: { kcal: 2116, p: 128, c: 241, f: 70 }, entries: [], foods: [], meals: [], mode: 'left' };
 
@@ -284,6 +488,29 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   const wfmt = v => String(Math.round(v * 100) / 100);
   const clone = o => JSON.parse(JSON.stringify(o));
   const mealLabel = id => (MEALS.find(m => m.id === id) || MEALS[0]).label;
+
+  // Inline SVG icons: 24 viewBox, 1.8 stroke, round caps (same set style as topbar.js icon()).
+  const ICON = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    chevL: '<path d="m15 18-6-6 6-6"/>',
+    chevR: '<path d="m9 18 6-6-6-6"/>',
+    more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    barcode: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M8 7v10M12 7v10M16 7v10"/>',
+    star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+    trash: '<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6M10 11v6M14 11v6"/>',
+    repeat: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+    bookmark: '<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+    sunrise: '<path d="M12 2v6M4.9 10.9l1.4 1.4M2 18h2M20 18h2M19.1 10.9l-1.4 1.4M22 22H2M8 6l4-4 4 4M16 18a4 4 0 0 0-8 0"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    apple: '<path d="M12 7c-1.5-1.3-4-1.5-5.6-.2C4.3 8.4 4 11.6 5.3 14.8 6.4 17.6 8.3 20 10 20c.8 0 1.3-.4 2-.4s1.2.4 2 .4c1.7 0 3.6-2.4 4.7-5.2 1.3-3.2 1-6.4-1.1-8-1.6-1.3-4.1-1.1-5.6.2Z"/><path d="M12 7c0-2 1-3.5 3-4"/>'
+  };
+  const svg = (k, filled) => '<svg class="row-ic" viewBox="0 0 24 24" fill="' + (filled ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[k] + '</svg>';
 
   const Day = {
     today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); },
@@ -307,8 +534,19 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     try { const r = JSON.parse(localStorage.getItem(LS_KEY)); if (r && typeof r === 'object') return Object.assign(clone(DEFAULTS), r); } catch (e) {}
     return clone(DEFAULTS);
   }
-  function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} }
-  const V = { date: Day.today() };
+  // A failed write (storage full: gym keeps progress photos in the same origin) must not look like a save:
+  // S goes back to what is stored, so the caller's render shows the truth, and a warning is shown. It is
+  // deferred so it replaces the caller's "Added …" toast instead of being replaced by it.
+  let saveWarned = false;
+  function save() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(S)); return true; }
+    catch (e) {
+      S = load();
+      if (!saveWarned) { saveWarned = true; setTimeout(() => { saveWarned = false; toast('Couldn’t save: storage is full. Delete old progress photos in Fitness.', null, 6000); }, 0); }
+      return false;
+    }
+  }
+  const V = { date: Day.today(), fresh: new Set() };   // fresh: ids of entries just logged, highlighted once
 
   // ---------- nutrition (ported from the HannesFitness Models) ----------
   const scale = (m, k) => ({ kcal: m.kcal * k, p: m.p * k, c: m.c * k, f: m.f * k });
@@ -361,8 +599,10 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   function foodHead(f) {
     const a = defaultAmount(f);
     const n = nut({ base: f.base, baseAmt: f.baseAmt, amount: String(a) });
-    const head = f.unit === 'g' ? (((f.servings && f.servings[0]) ? f.servings[0].label + ' · ' : '') + wfmt(a) + ' g') : servingText(1, f.servingLabel || 'serving', f.servingGrams);
-    return { head: head + ' · ' + n0(n.kcal) + ' kcal', macros: n };
+    // "1 pot (150 g)", "40 g", "100 g": the grams once, never "40 g · 40 g".
+    const lab = f.servings && f.servings[0] && f.servings[0].label;
+    const amount = f.unit === 'g' ? (lab ? (/\d\s*g\)?$/.test(lab) ? lab : lab + ' (' + wfmt(a) + ' g)') : wfmt(a) + ' g') : servingText(1, f.servingLabel || 'serving', f.servingGrams);
+    return { amount, head: amount + ' · ' + n0(n.kcal) + ' kcal', macros: n };
   }
   function match(query, name) {
     const toks = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(t => t.length > 1).map(t => t.length > 3 && t.endsWith('s') ? t.slice(0, -1) : t);
@@ -469,7 +709,7 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     let servings = [];
     const q = offNum(p.serving_quantity);
     if (q > 0 && q < 2000) {
-      let label = String(p.serving_size || '').trim();
+      let label = String(p.serving_size || '').trim().replace(/\s*\(\s*[\d.,]+\s*(g|ml)\s*\)\s*$/i, '').replace(/^([\d.,]+)\s*(g|ml)$/i, '$1 $2');
       if (!label || label.length > 22) label = '1 serving';
       servings = [{ label, grams: Math.round(q * 10) / 10 }];
     }
@@ -478,16 +718,13 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
       baseAmt: 100, unit: 'g', servings, barcode: code || null, brand, source: 'off' };
   }
   async function offSearch(q) {
-    // search.openfoodfacts.org is what the app uses, but it doesn't always send CORS headers to browsers;
-    // fall back to the classic search endpoint on the .net mirror, which does.
-    let hits;
-    try {
-      const r = await fetch('https://search.openfoodfacts.org/search?q=' + encodeURIComponent(q) + '&page_size=20&fields=' + OFF_FIELDS);
-      hits = (await r.json()).hits;
-    } catch (e) {
-      const r = await fetch('https://world.openfoodfacts.net/cgi/search.pl?search_terms=' + encodeURIComponent(q) + '&search_simple=1&action=process&json=1&page_size=20&fields=' + OFF_FIELDS);
-      hits = (await r.json()).products;
-    }
+    // search.openfoodfacts.org sends no CORS header to pages (origin 'null' in the app), so use the classic
+    // search on the production host, which does; the .net mirror covers its rate-limit 503s.
+    const url = h => 'https://' + h + '/cgi/search.pl?search_terms=' + encodeURIComponent(q) + '&search_simple=1&action=process&json=1&page_size=20&fields=' + OFF_FIELDS;
+    let r;
+    try { r = await fetch(url('world.openfoodfacts.org')); if (!r.ok) throw new Error('HTTP ' + r.status); }
+    catch (e) { r = await fetch(url('world.openfoodfacts.net')); }
+    const hits = (await r.json()).products;
     const seen = new Set();
     return (hits || []).map(offFood).filter(Boolean).filter(f => { const k = displayName(f).toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   }
@@ -505,18 +742,47 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
 
   // ---------- toast ----------
   let toastTimer;
-  function toast(msg, undo) {
+  function toast(msg, undo, ms) {
     const t = $('#toast');
     t.innerHTML = '<span>' + esc(msg) + '</span>' + (undo ? '<button type="button">Undo</button>' : '');
-    if (undo) $('button', t).onclick = () => { undo(); save(); t.classList.remove('in'); refresh(); };
-    t.classList.add('in'); clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('in'), undo ? 5000 : 2600);
+    // Each Undo runs at most once, and never after its toast has gone (a hidden toast also takes no taps).
+    let used = false;
+    const hide = () => { t.classList.remove('in'); const b = $('button', t); if (b) b.onclick = null; };
+    if (undo) $('button', t).onclick = () => { if (used) return; used = true; clearTimeout(toastTimer); hide(); undo(); save(); refresh(); };
+    placeToast(); t.classList.add('in'); clearTimeout(toastTimer);
+    toastTimer = setTimeout(hide, ms || (undo ? 5000 : 2600));
   }
 
-  // ---------- rings ----------
-  function ring(frac, r, cls) {
-    const C = 2 * Math.PI * r, p = Math.max(0, Math.min(1, frac));
-    return '<circle class="t" cx="20" cy="20" r="' + r + '"/><circle class="p ' + (cls || '') + '" cx="20" cy="20" r="' + r + '" stroke-dasharray="' + C.toFixed(2) + '" stroke-dashoffset="' + (C * (1 - p)).toFixed(2) + '"/>';
+  // With a sheet open the toast floats just above its footer (or above a footer-less sheet), never over its
+  // controls. Re-run whenever the top sheet changes, so a toast that's still showing moves with it.
+  function placeToast() {
+    const t = $('#toast'), top = sheets[sheets.length - 1];
+    const foot = top && top.querySelector('.sheet-foot:not(:empty)'), sh = top && top.querySelector('.sheet');
+    t.style.bottom = foot ? (foot.offsetHeight + 12) + 'px' : sh ? (sh.offsetHeight + 12) + 'px' : '';
+  }
+
+  // ---------- rings & fills ----------
+  // render() rebuilds #app, so fills would otherwise never animate. Each fill is emitted at the value the user
+  // last saw (PREV) and moved to its new value two frames later, so a logged meal visibly lands. PREV only
+  // updates while no sheet covers the page, so food added in a sheet animates when that sheet closes.
+  // Values that didn't change, and the first paint (no PREV yet), are emitted at their final value.
+  const PREV = {};
+  function ring(frac, r, cls, key) {
+    const C = 2 * Math.PI * r, p = Math.max(0, Math.min(1, frac)), off = (C * (1 - p)).toFixed(2);
+    const from = key ? PREV[key] : null; if (key && !sheets.length) PREV[key] = off;
+    const anim = from != null && from !== off;
+    return '<circle class="t" cx="20" cy="20" r="' + r + '"/><circle class="p ' + (cls || '') + (p > 0 || anim ? '' : ' zero') + '" cx="20" cy="20" r="' + r + '" stroke-dasharray="' + C.toFixed(2) + '" stroke-dashoffset="' + (anim ? from : off) + '"' + (anim ? ' data-off="' + off + '"' : '') + '/>';
+  }
+  function fill(key, pct, color) {
+    const from = PREV[key]; if (!sheets.length) PREV[key] = pct;
+    const anim = from != null && Math.abs(from - pct) > 0.05;
+    return '<i style="width:' + (anim ? from : pct) + '%' + (color ? ';background:' + color : '') + '"' + (anim ? ' data-to="' + pct + '"' : '') + '></i>';
+  }
+  function animateFills() {
+    const pend = document.querySelectorAll('#app [data-to], #app [data-off]'); if (!pend.length) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => pend.forEach(n => {
+      if (n.dataset.to != null) n.style.width = n.dataset.to + '%'; else n.style.strokeDashoffset = n.dataset.off;
+    })));
   }
 
   // ---------- main view ----------
@@ -528,7 +794,8 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     const left = S.mode === 'left';
     const bigVal = left ? Math.abs(tg.kcal - sumD.kcal) : sumD.kcal;
     const headTxt = (S.mode === 'eaten' ? 'Eaten' : over ? 'Over' : 'Left') + (d === today ? ' today' : '');
-    const meta = left ? n0(sumD.kcal) + ' eaten · ' + n0(tg.kcal) + ' target'
+    const meta = !es.length ? (d < today ? 'Nothing logged' : 'Nothing logged yet') + ' · ' + n0(tg.kcal) + ' target'
+      : left ? n0(sumD.kcal) + ' eaten · ' + n0(tg.kcal) + ' target'
       : n0(Math.abs(tg.kcal - sumD.kcal)) + (over ? ' over' : ' left') + ' · ' + n0(tg.kcal) + ' target';
 
     // "Same as yesterday" sources: latest of the last 3 days with entries, per meal.
@@ -545,43 +812,47 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     const mon = Day.weekStart(d);
     const cells = [0, 1, 2, 3, 4, 5, 6].map(i => {
       const x = Day.add(mon, i), k = eaten(x).kcal, has = k > 0;
-      return '<button type="button" class="wcell' + (x === d ? ' sel' : '') + (x === today ? ' today' : '') + (x > today ? ' future' : '') + '" data-act="day" data-d="' + x + '" aria-label="' + esc(Day.long(x)) + '">'
-        + '<span class="dow">' + 'MTWTFSS'[i] + '</span><div class="wring"><svg viewBox="0 0 40 40">' + ring(has ? k / kt : 0, 16, k > tg.kcal ? 'over' : '') + '</svg><span>' + Day.dom(x) + '</span></div></button>';
+      return '<button type="button" class="wcell' + (x === d ? ' sel' : '') + (x === today ? ' today' : '') + (x > today ? ' future' : '') + '" data-act="day" data-d="' + x + '" aria-pressed="' + (x === d) + '"' + (x === today ? ' aria-current="date"' : '') + ' aria-label="' + esc(Day.long(x) + (has ? ', ' + n0(k) + ' kcal' : '')) + '">'
+        + '<span class="dow" aria-hidden="true">' + 'MTWTFSS'[i] + '</span><span class="wring" aria-hidden="true"><svg viewBox="0 0 40 40">' + ring(has ? k / kt : 0, 16, k > tg.kcal ? 'over' : '', 'w' + x) + '</svg><span>' + Day.dom(x) + '</span></span></button>';
     }).join('');
 
     const macro = (label, key, color) => {
       const v = sumD[key], t = tg[key], dlt = Math.round(t - v);
       const shown = left && t > 0 ? Math.abs(dlt) : Math.round(v);
-      const unit = left && t > 0 ? (dlt < 0 ? 'g over' : 'g') : '/ ' + n0(t) + ' g';
+      const unit = left && t > 0 ? (dlt < 0 ? 'g over' : 'g left') : '/ ' + n0(t) + ' g';
       return '<div class="mac"><div class="lab"><span class="dot" style="background:' + color + '"></span>' + label + '</div>'
-        + '<div class="val">' + n0(shown) + ' <small>' + unit + '</small></div>'
-        + '<div class="mbar"><i style="width:' + Math.min(100, t > 0 ? v / t * 100 : 0) + '%;background:' + color + '"></i></div></div>';
+        + '<div class="val">' + n0(shown) + '<small>' + unit + '</small></div>'
+        + '<div class="bar bar--thin">' + fill(key, Math.min(100, t > 0 ? v / t * 100 : 0), color) + '</div></div>';
     };
 
     const meals = MEALS.map(m => {
       const items = es.filter(e => e.meal === m.id), t = sum(items), src = sources[m.id];
       const srcLabel = src ? (Day.diff(d, src.date) === 1 ? 'yesterday' : Day.DOW[Day.dow(src.date)].slice(0, 3)) : '';
       return '<div class="meal"><div class="meal-head">'
-        + '<button type="button" class="meal-main" data-act="add" data-meal="' + m.id + '"><span class="tile">' + m.icon + '</span><span><div class="meal-name">' + m.label + '</div>'
-        + (items.length ? '<div class="meal-sub has">' + n0(t.kcal) + ' kcal · ' + pcf(t) + '</div>' : '<div class="meal-sub">Nothing yet</div>') + '</span></button>'
-        + ((items.length >= 2 || src) ? '<button type="button" class="circle ghost" data-act="meal-menu" data-meal="' + m.id + '" aria-label="' + m.label + ' options">⋯</button>' : '')
-        + '<button type="button" class="circle" data-act="add" data-meal="' + m.id + '" aria-label="Add food to ' + m.label + '">+</button></div>'
+        + '<button type="button" class="meal-main" data-act="add" data-meal="' + m.id + '"><span class="row-tile">' + svg(m.icon) + '</span><span><span class="meal-name">' + m.label + '</span>'
+        + (items.length ? '<span class="meal-sub has">' + n0(t.kcal) + '\u00a0kcal\u00a0· ' + pcfNb(t) + '</span>' : '<span class="meal-sub">Nothing yet</span>') + '</span></button>'
+        + ((items.length >= 2 || src) ? '<button type="button" class="icon-btn icon-btn--plain" data-act="meal-menu" data-meal="' + m.id + '" aria-label="' + m.label + ' options">' + svg('more', true) + '</button>' : '')
+        + '<button type="button" class="circle" data-act="add" data-meal="' + m.id + '" aria-label="Add food to ' + m.label + '">' + svg('plus') + '</button></div>'
         + items.map(e => { const n = nut(e), pg = Math.round(n.p);
-            return '<button type="button" class="entry" data-act="edit" data-id="' + e.id + '"><div class="l"><div class="nm">' + esc(e.name) + '</div><div class="am">' + esc(amtText(e)) + (pg > 0 ? ' · P ' + pg : '') + '</div></div><div class="kc">' + n0(n.kcal) + '<small>kcal</small></div></button>'; }).join('')
-        + (!items.length && offer === m.id && src ? '<button type="button" class="copy-row" data-act="copy" data-meal="' + m.id + '">↺ Same as ' + srcLabel + ' <span>· ' + n0(sum(src.items).kcal) + ' kcal</span></button>' : '')
+            return '<button type="button" class="entry' + (V.fresh.has(e.id) ? ' is-new' : '') + '" data-act="edit" data-id="' + e.id + '"><span class="l"><span class="nm">' + esc(e.name) + '</span><span class="am">' + esc(amtText(e)) + (pg > 0 ? ' · P ' + pg : '') + '</span></span><span class="kc">' + n0(n.kcal) + '<small>kcal</small></span></button>'; }).join('')
+        + (!items.length && offer === m.id && src ? '<div class="copy-row"><button type="button" class="btn btn--sm btn--accent" data-act="copy" data-meal="' + m.id + '">' + svg('repeat') + 'Same as ' + srcLabel + '</button><span class="row-meta">' + n0(sum(src.items).kcal) + ' kcal</span></div>' : '')
         + '</div>';
     }).join('');
 
     $('#app').innerHTML =
-      '<div class="head"><div><h1 class="dash-title">Food</h1><div class="sub">' + esc(Day.long(d)) + '</div></div>'
-      + '<div class="head-actions">' + (d !== today ? '<button type="button" class="pill-btn" data-act="today">↩ Today</button>' : '') + '</div></div>'
-      + '<div class="week"><button type="button" class="week-arrow" data-act="week" data-n="-7" aria-label="Previous week">‹</button><div class="week-cells" id="weekCells">' + cells + '</div><button type="button" class="week-arrow" data-act="week" data-n="7" aria-label="Next week">›</button></div>'
-      + '<div class="card hero"><div class="hero-top"><span class="eyebrow">' + headTxt + '</span><button type="button" class="icon-btn" data-act="targets" aria-label="Edit targets">⚙︎</button></div>'
-      + '<button type="button" class="big" data-act="mode" aria-label="Switch between left and eaten"><span class="n">' + n0(bigVal) + '</span><span class="u">kcal</span></button>'
-      + '<div class="bar' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, frac * 100) + '%"></i></div>'
-      + '<div class="meta">' + meta + '</div><div class="hair"></div>'
+      '<div class="page-head"><div><h1 class="page-title">Food</h1><div class="page-sub">' + esc(Day.long(d)) + '</div></div>'
+      + '<div class="head-actions">' + (d !== today ? '<button type="button" class="btn btn--sm btn--secondary" data-act="today">Today</button>' : '')
+      + '<button type="button" class="icon-btn" data-act="targets" aria-label="Daily targets">' + svg('target') + '</button></div></div>'
+      + '<div class="week"><button type="button" class="week-arrow" data-act="week" data-n="-7" aria-label="Previous week">' + svg('chevL') + '</button><div class="week-cells" id="weekCells">' + cells + '</div><button type="button" class="week-arrow" data-act="week" data-n="7" aria-label="Next week">' + svg('chevR') + '</button></div>'
+      + '<div class="card card--hero hero"><span class="eyebrow' + (over && left ? ' is-over' : '') + '">' + headTxt + '</span>'
+      + '<button type="button" class="big" data-act="mode"><span class="n">' + n0(bigVal) + '</span><span class="u">kcal</span><span class="row-sr"> ' + headTxt.toLowerCase() + '. Tap to show calories ' + (left ? 'eaten' : 'left') + '.</span></button>'
+      + '<div class="bar bar--lg' + (over ? ' over' : '') + '">' + fill('kcal', Math.min(100, frac * 100)) + '</div>'
+      + '<div class="meta' + (over && !left ? ' is-over' : '') + '">' + meta + '</div><div class="hair"></div>'
       + '<div class="macros">' + macro('Protein', 'p', 'var(--protein)') + macro('Carbs', 'c', 'var(--carbs)') + macro('Fat', 'f', 'var(--fat)') + '</div></div>'
-      + '<div class="section-title">Meals</div><div class="card meals">' + meals + '</div>';
+      + '<div class="section-label">Meals</div><div class="list meals">' + meals + '</div>';
+    animateFills();
+    // New rows keep their highlight until the sheet they were added from has closed.
+    if (!sheets.length) V.fresh.clear();
 
     // swipe to page weeks
     const wk = $('#weekCells'); let sx = 0, sy = 0;
@@ -617,7 +888,7 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     const label = Day.diff(V.date, src.date) === 1 ? 'yesterday' : Day.DOW[Day.dow(src.date)].slice(0, 3);
     const fresh = src.items.map(it => Object.assign(clone(it), { id: uid(), date: V.date, meal: mealId, ts: Date.now() / 1000 }));
     const ids = new Set(fresh.map(x => x.id));
-    S.entries.push(...fresh); save(); render();
+    S.entries.push(...fresh); ids.forEach(id => V.fresh.add(id)); save(); render();
     toast('Copied ' + mealLabel(mealId) + ' from ' + label + ' · ' + fresh.length + ' items', () => { S.entries = S.entries.filter(x => !ids.has(x.id)); });
   }
 
@@ -627,20 +898,31 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     o = o || {};
     const prev = sheets[sheets.length - 1]; if (prev) prev.classList.add('under');
     const el = document.createElement('div'); el.className = 'sheet-overlay';
-    el.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="sheet-grab"></div>'
-      + '<div class="sheet-head"><div class="sheet-x"><button type="button" data-close aria-label="Close">✕</button></div><h2>' + esc(title) + '</h2><div class="sheet-right">' + (o.headRight || '') + '</div></div>'
+    // o.sub: a pinned strip between the head and the scrolling body. o.tall: fixed full height.
+    el.innerHTML = '<div class="sheet' + (o.tall ? ' row-sheet-tall' : '') + (o.footer ? '' : ' row-no-foot') + '" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="sheet-grab"></div>'
+      + '<div class="sheet-head"><div class="sheet-x"><button type="button" data-close aria-label="Close"><span>' + svg('x') + '</span></button></div><h2>' + esc(title) + '</h2><div class="sheet-right">' + (o.headRight || '') + '</div></div>'
+      + (o.sub ? '<div class="row-sheet-sub">' + o.sub + '</div>' : '')
       + '<div class="sheet-body">' + (o.body || '') + '</div><div class="sheet-foot">' + (o.footer || '') + '</div></div>';
     el.addEventListener('click', e => { if (e.target === el || e.target.closest('[data-close]')) closeSheet(); });
+    // Swipe down on the grab handle or title closes, as the handle promises. Not from fields or buttons.
+    const sh = el.querySelector('.sheet'); let y0 = null;
+    sh.addEventListener('touchstart', e => { y0 = e.target.closest('.sheet-grab, .sheet-head h2') ? e.touches[0].clientY : null; }, { passive: true });
+    sh.addEventListener('touchend', e => { if (y0 != null && e.changedTouches[0].clientY - y0 > 70 && sheets[sheets.length - 1] === el) closeSheet(); y0 = null; });
     document.body.appendChild(el); document.body.classList.add('sheet-open');
-    requestAnimationFrame(() => el.classList.add('in'));
+    requestAnimationFrame(() => { placeToast(); requestAnimationFrame(() => { if (!el.classList.contains('out')) el.classList.add('in'); }); });
     sheets.push(el); return el;
   }
   function closeSheet() {
     const el = sheets.pop(); if (!el) return;
-    el.remove();
+    // Slide out, then remove. Ids go now, so the global #addList/#addFoot/#addTabs lookups can only ever
+    // find the live sheet, even if a new Add sheet opens while this one is still animating away.
+    el.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    el.classList.remove('in', 'under'); el.classList.add('out');
+    setTimeout(() => el.remove(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 360);
     const top = sheets[sheets.length - 1];
     if (top) top.classList.remove('under'); else document.body.classList.remove('sheet-open');
     render(); if (top && top._refresh) top._refresh();
+    placeToast();
   }
   function closeAll() { while (sheets.length) closeSheet(); }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheets.length) closeSheet(); });
@@ -648,14 +930,16 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   // ---------- targets ----------
   function openTargets() {
     const t = S.targets;
-    const row = (id, color, label, unit, v) => '<div class="frow"><label><span class="dot" style="background:' + color + '"></span>' + label + '</label><input id="' + id + '" inputmode="numeric" value="' + v + '"><span class="unit">' + unit + '</span></div>';
+    const row = (id, color, label, unit, v) => '<div class="frow"><label for="' + id + '"><span class="dot" style="background:' + color + '"></span>' + label + '</label><input id="' + id + '" inputmode="numeric" value="' + v + '"><span class="unit">' + unit + '</span></div>';
     const el = openSheet('Daily targets', {
-      body: '<div class="form-card">' + row('tk', 'var(--kcal)', 'Calories', 'kcal', t.kcal) + row('tp', 'var(--protein)', 'Protein', 'g', t.p) + row('tc', 'var(--carbs)', 'Carbohydrate', 'g', t.c) + row('tf', 'var(--fat)', 'Fat', 'g', t.f) + '</div><div class="proj" id="tcheck"></div>',
-      footer: '<button type="button" class="btn cta" id="tsave">Save targets</button>'
+      body: '<div class="form-card">' + row('tk', 'var(--kcal)', 'Calories', 'kcal', t.kcal) + row('tp', 'var(--protein)', 'Protein', 'g', t.p) + row('tc', 'var(--carbs)', 'Carbohydrate', 'g', t.c) + row('tf', 'var(--fat)', 'Fat', 'g', t.f) + '</div><div class="field-help mono" id="tcheck"></div>',
+      footer: '<button type="button" class="btn btn--primary btn--block btn--lg" id="tsave">Save targets</button>'
     });
     const chk = () => {
       const k = num($('#tk', el).value), m = (num($('#tp', el).value) || 0) * 4 + (num($('#tc', el).value) || 0) * 4 + (num($('#tf', el).value) || 0) * 9;
-      $('#tcheck', el).textContent = !(k > 0) ? 'Enter a calorie target.' : 'P×4 + C×4 + F×9 = ' + n0(m) + ' kcal · ' + (Math.abs(m - k) < 1 ? 'matches' : n0(Math.abs(m - k)) + (m < k ? ' under' : ' over'));
+      const tc = $('#tcheck', el);
+      tc.textContent = !(k > 0) ? 'Enter a calorie target.' : 'P×4 + C×4 + F×9 = ' + n0(m) + ' kcal · ' + (Math.abs(m - k) < 1 ? 'matches' : n0(Math.abs(m - k)) + (m < k ? ' under' : ' over'));
+      tc.classList.toggle('is-warn', !(k > 0) || Math.abs(m - k) > Math.max(50, k * 0.03));
     };
     el.addEventListener('input', chk); chk();
     $('#tsave', el).onclick = () => {
@@ -671,7 +955,7 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     const items = S.entries.filter(e => e.date === V.date && e.meal === mealId), src = sourcesFor(mealId);
     const label = src ? (Day.diff(V.date, src.date) === 1 ? 'yesterday' : Day.DOW[Day.dow(src.date)].slice(0, 3)) : '';
     const el = openSheet(mealLabel(mealId), {
-      body: '<div class="menu-list">' + (items.length >= 2 ? '<button type="button" data-m="save">🔖 Save as meal</button>' : '') + (src ? '<button type="button" data-m="copy">↺ Copy from ' + label + '</button>' : '') + '</div>'
+      body: '<div class="menu-list">' + (items.length >= 2 ? '<button type="button" data-m="save">' + svg('bookmark') + 'Save as meal</button>' : '') + (src ? '<button type="button" data-m="copy">' + svg('repeat') + 'Copy from ' + label + '</button>' : '') + '</div>'
     });
     el.addEventListener('click', e => {
       const b = e.target.closest('[data-m]'); if (!b) return;
@@ -682,10 +966,11 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   function openSaveMeal(items) {
     const t = sum(items);
     const el = openSheet('Save as meal', {
-      body: '<input class="field" id="mname" placeholder="Meal name" maxlength="60"><div class="note">' + items.length + ' items · ' + n0(t.kcal) + ' kcal · ' + pcf(t) + '</div>',
-      footer: '<button type="button" class="btn cta" id="msave">Save meal</button>'
+      body: '<input class="field" id="mname" placeholder="Meal name" aria-label="Meal name" maxlength="60" enterkeyhint="done"><div class="field-help mono">' + items.length + ' items · ' + n0(t.kcal) + ' kcal · ' + pcf(t) + '</div>',
+      footer: '<button type="button" class="btn btn--primary btn--block btn--lg" id="msave">Save meal</button>'
     });
     $('#mname', el).focus();
+    $('#mname', el).onkeydown = e => { if (e.key === 'Enter') $('#msave', el).click(); };
     $('#msave', el).onclick = () => {
       const name = $('#mname', el).value.trim(); if (!name) return toast('Name the meal first');
       S.meals.unshift({ id: uid(), name, items: items.map(e => ({ name: e.name, base: e.base, baseAmt: e.baseAmt, unit: e.unit, servings: e.servings || [], servingLabel: e.servingLabel, servingGrams: e.servingGrams, amount: e.amount })) });
@@ -698,7 +983,9 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   let regKey = 0, REG = {};
   function entryFood(e) { return { id: uid(), name: e.name, base: e.base, baseAmt: e.baseAmt, unit: e.unit, servings: e.servings || [], servingLabel: e.servingLabel, servingGrams: e.servingGrams, barcode: e.barcode }; }
   function savedFoods() { return S.foods; }
-  const isSaved = name => S.foods.some(f => f.name === name);
+  // Same product: same barcode, or same name as shown (OFF names leave the brand out, so the bare name isn't enough).
+  const sameFood = (a, b) => !!(a.barcode && a.barcode === b.barcode) || displayName(a) === displayName(b);
+  const isSaved = food => S.foods.some(f => sameFood(f, food));
 
   function frequent() {
     const from = Day.add(Day.today(), -14), by = {};
@@ -712,32 +999,37 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   function openAdd(meal, date, tab, prefill) {
     A = { meal: meal || defMeal(), date: date || V.date, tab: tab || 'search', q: '', online: [], ostate: 'idle', recent: frequent(), added: {}, man: Object.assign({ name: '', per100: false, serving: '', servingG: '', kcal: '', p: '', c: '', f: '', barcode: '', save: true }, prefill || {}) };
     const mealSel = '<select class="sel-pill" id="addMeal" aria-label="Meal">' + MEALS.map(m => '<option value="' + m.id + '"' + (m.id === A.meal ? ' selected' : '') + '>' + m.label + '</option>').join('') + '</select>';
+    // Search and tabs are pinned above the scrolling list, and the sheet keeps one height.
     const el = openSheet(A.date === Day.today() ? 'Add food' : Day.fmt(A.date), {
-      headRight: mealSel,
-      body: '<div class="search"><input class="field" id="addQ" type="search" placeholder="Search foods and brands" autocomplete="off"></div>'
-        + '<div class="shortcuts"><button type="button" class="shortcut" id="scBarcode"><span class="tile">▥</span><span><b>Barcode</b><small>Type the number from the pack</small></span></button></div>'
-        + '<div class="seg" id="addTabs"></div><div id="addList" style="display:flex;flex-direction:column;gap:14px"></div>',
+      headRight: mealSel, tall: true,
+      sub: '<div class="search">' + svg('search') + '<input class="field" id="addQ" type="search" enterkeyhint="search" placeholder="Search foods and brands" aria-label="Search foods" autocomplete="off">'
+        + '<button type="button" class="icon-btn icon-btn--plain row-scan" id="scBarcode" aria-label="Look up a barcode">' + svg('barcode') + '</button></div>'
+        + '<div class="seg" id="addTabs"></div>',
+      body: '<div id="addList" class="row-stack"></div>',
       footer: '<div id="addFoot"></div>'
     });
-    el._refresh = () => { renderAddList(); renderAddFoot(); };
+    // The manual form doesn't depend on S, and rebuilding it would drop the field being typed in.
+    el._refresh = () => { const sel = el.querySelector('.sel-pill'); if (sel) sel.value = A.meal; if (A.tab !== 'manual') { renderAddList(); renderAddFoot(); } };
+    const toTop = () => { const sb = el.querySelector('.sheet-body'); if (sb) sb.scrollTop = 0; };
     $('#addMeal', el).onchange = e => { A.meal = e.target.value; };
-    $('#addQ', el).oninput = e => { A.q = e.target.value; if (A.tab !== 'search') A.tab = 'search'; renderTabs(); renderAddList(); scheduleOnline(); };
+    $('#addQ', el).oninput = e => { A.q = e.target.value; if (A.tab !== 'search') { A.tab = 'search'; renderAddFoot(); } scheduleOnline(); renderTabs(); renderAddList(); toTop(); };
+    $('#addQ', el).onkeydown = e => { if (e.key === 'Enter') e.target.blur(); };
     $('#scBarcode', el).onclick = openBarcode;
-    $('#addTabs', el).onclick = e => { const b = e.target.closest('button'); if (!b) return; A.tab = b.dataset.t; renderTabs(); renderAddList(); renderAddFoot(); };
+    $('#addTabs', el).onclick = e => { const b = e.target.closest('button'); if (!b) return; A.tab = b.dataset.t; renderTabs(); renderAddList(); renderAddFoot(); toTop(); };
     $('#addList', el).onclick = onAddListClick;
     renderTabs(); renderAddList(); renderAddFoot();
-    if (A.tab !== 'manual') setTimeout(() => { try { $('#addQ', el).focus({ preventScroll: true }); } catch (e) {} }, 320);
+    if (A.tab !== 'manual') setTimeout(() => { try { if (sheets[sheets.length - 1] === el) $('#addQ', el).focus({ preventScroll: true }); } catch (e) {} }, 380);
   }
   function renderTabs() {
-    $('#addTabs').innerHTML = [['search', 'Search'], ['saved', 'Saved'], ['meals', 'Meals'], ['manual', 'Manual']].map(t => '<button type="button" data-t="' + t[0] + '" class="' + (A.tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>').join('');
+    $('#addTabs').innerHTML = [['search', 'Search'], ['saved', 'Saved'], ['meals', 'Meals'], ['manual', 'Manual']].map(t => '<button type="button" data-t="' + t[0] + '" class="' + (A.tab === t[0] ? 'on' : '') + '" aria-pressed="' + (A.tab === t[0]) + '">' + t[1] + '</button>').join('');
   }
   function renderAddFoot() {
     const f = $('#addFoot'); if (!f) return;
-    if (A.tab === 'manual') { f.innerHTML = '<button type="button" class="btn cta" id="manGo">Choose amount</button>'; $('#manGo').onclick = manualGo; return; }
+    if (A.tab === 'manual') { f.innerHTML = '<button type="button" class="btn btn--primary btn--block btn--lg" id="manGo">Choose amount</button>'; $('#manGo').onclick = manualGo; return; }
     const tg = S.targets, t = eaten(A.date), left = tg.kcal - t.kcal;
     const ml = { p: Math.max(0, tg.p - t.p), c: Math.max(0, tg.c - t.c), f: Math.max(0, tg.f - t.f) };
-    f.innerHTML = '<div class="plate"><div><div class="l">' + (left < 0 ? 'Over' : 'Left') + (A.date === Day.today() ? ' today' : ' · ' + Day.fmt(A.date)) + '</div><div class="v">' + n0(Math.abs(left)) + ' <small>kcal</small></div></div>'
-      + '<div class="m">' + pcf(ml) + '</div><button type="button" class="btn" id="addDone">Done</button></div>';
+    f.innerHTML = '<div class="plate"><div><div class="l' + (left < 0 ? ' is-over' : '') + '">' + (left < 0 ? 'Over' : 'Left') + (A.date === Day.today() ? ' today' : ' · ' + Day.fmt(A.date)) + '</div><div class="v">' + n0(Math.abs(left)) + '<small>kcal</small></div></div>'
+      + '<div class="m">' + pcf(ml) + '</div><button type="button" class="btn btn--secondary" id="addDone">Done</button></div>';
     $('#addDone').onclick = closeAll;
   }
 
@@ -745,8 +1037,9 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   function scheduleOnline() {
     clearTimeout(onlineTimer);
     const q = A.q.trim();
-    if (A.tab !== 'search' || q.length < 2) { A.online = []; A.ostate = 'idle'; return; }
-    A.ostate = 'loading'; renderAddList();
+    // Bump the sequence here too, so a request already in flight can't fill in results for the old query.
+    if (A.tab !== 'search' || q.length < 2) { onlineSeq++; A.online = []; A.ostate = 'idle'; return; }
+    A.ostate = 'loading';   // the caller renders the list next
     const seq = ++onlineSeq;
     onlineTimer = setTimeout(async () => {
       try { const r = await offSearch(q); if (seq !== onlineSeq || !A) return; A.online = r; A.ostate = 'done'; }
@@ -758,16 +1051,20 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   function reg(x) { const k = 'k' + (++regKey); REG[k] = x; return k; }
   function foodRow(fo) {
     const h = foodHead(fo);
-    return rowHtml({ key: reg({ kind: 'food', food: fo }), name: displayName(fo), head: (fo.brand ? fo.brand + ' · ' : '') + h.head, macros: h.macros });
+    return rowHtml({ key: reg({ kind: 'food', food: fo }), name: displayName(fo), amount: h.amount, kcal: h.macros.kcal, macros: h.macros });
   }
   function recentRow(e) {
     const n = nut(e);
-    return rowHtml({ key: reg({ kind: 'recent', entry: e }), name: e.name, head: amtText(e) + ' · ' + n0(n.kcal) + ' kcal', macros: n });
+    return rowHtml({ key: reg({ kind: 'recent', entry: e }), name: e.name, amount: amtText(e), kcal: n.kcal, macros: n });
   }
+  // Compact macros, "P 39 C 89 F 13", in unbreakable tokens: a narrow row wraps between tokens, never inside one.
+  const pcfNb = n => ['p', 'c', 'f'].map(k => k.toUpperCase() + '\u00a0' + Math.round(n[k])).join(' ');
+  const nb = t => String(t).replace(/ /g, '\u00a0');
+  // One row: name, then "amount · P C F" (wraps to a second line before it truncates), kcal in its own column.
   function rowHtml(r) {
     const done = A.added[r.key];
-    return '<div class="row"><button type="button" class="row-main" data-k="' + r.key + '" data-a="open"><div class="nm">' + esc(r.name) + '</div><div class="hd">' + esc(r.head) + '</div>' + (r.macros ? '<div class="mc">' + pcf(r.macros) + '</div>' : '') + '</div></button>'
-      + '<button type="button" class="circle' + (done ? ' done' : '') + '" data-k="' + r.key + '" data-a="quick" aria-label="Quick add ' + esc(r.name) + '">' + (done ? '✓' : '+') + '</button></div>';
+    return '<div class="row"><button type="button" class="row-main" data-k="' + r.key + '" data-a="open"><span class="l"><span class="nm">' + esc(r.name) + '</span><span class="hd">' + esc(nb(r.amount) + (r.macros ? '\u00a0· ' + pcfNb(r.macros) : '')) + '</span></span><span class="kc">' + n0(r.kcal) + '<small>kcal</small></span></button>'
+      + '<button type="button" class="circle' + (done ? ' done' : '') + '" data-k="' + r.key + '" data-a="quick" aria-label="Quick add ' + esc(r.name) + '">' + svg(done ? 'check' : 'plus') + '</button></div>';
   }
 
   function renderAddList() {
@@ -775,7 +1072,8 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     REG = {}; regKey = 0;
     const q = A.q.trim(), saved = savedFoods();
     let html = '';
-    const group = (title, rowsHtml) => '<div style="display:flex;flex-direction:column;gap:8px"><div class="group-label">' + title + '</div><div class="rows">' + rowsHtml + '</div></div>';
+    const group = (title, rowsHtml) => '<div class="row-group"><div class="group-label">' + title + '</div><div class="rows">' + rowsHtml + '</div></div>';
+    const empty = (title, body, btn) => '<div class="empty"><div class="empty-title">' + title + '</div><div class="empty-body">' + body + '</div>' + (btn || '') + '</div>';
     if (A.tab === 'search') {
       let rows = [];
       if (q) {
@@ -787,25 +1085,26 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
         if (rows.length) html += group('On this device', rows.join(''));
         const showOnline = A.ostate === 'loading' || A.online.length || (A.ostate === 'failed' && rows.length);
         if (showOnline) {
-          html += '<div style="display:flex;flex-direction:column;gap:8px"><div class="group-label">Online · Open Food Facts' + (A.ostate === 'loading' ? ' <span style="font-weight:500;letter-spacing:0;text-transform:none">searching…</span>' : '') + '</div>'
-            + (A.online.length ? '<div class="rows">' + A.online.map(foodRow).join('') + '</div>' : A.ostate === 'failed' ? '<div class="note">Couldn’t reach Open Food Facts</div>' : '') + '</div>';
+          html += '<div class="row-group"><div class="group-label">Open Food Facts' + (A.ostate === 'loading' ? '<span class="meta">Searching…</span>' : '') + '</div>'
+            + (A.online.length ? '<div class="rows">' + A.online.map(foodRow).join('') + '</div>' : A.ostate === 'failed' ? '<div class="field-help">Couldn’t reach Open Food Facts. Foods on this device still work.</div>' : '') + '</div>';
         }
         if (!rows.length && !A.online.length && A.ostate !== 'loading') {
-          html += '<div class="empty">No match for “' + esc(q) + '”.<br><button type="button" class="chip" style="margin-top:10px" data-a="manualFrom">Add it manually</button></div>';
+          html += empty('No match for “' + esc(q) + '”', A.ostate === 'failed' ? 'Nothing on this device, and Open Food Facts couldn’t be reached. Enter the values from the label.' : 'Check the spelling, or enter the values from the label.',
+            '<button type="button" class="btn btn--secondary" data-a="manualFrom">Add manually</button>');
         }
       } else {
         rows = A.recent.slice(0, 8).map(recentRow);
         html += rows.length ? group('Frequent', rows.join('')) : group('Common foods', LIB.slice(0, 10).map(foodRow).join(''));
       }
     } else if (A.tab === 'saved') {
-      html += saved.length ? group('Saved foods', saved.map(foodRow).join('')) : '<div class="empty">Star a food to keep it here.</div>';
+      html += saved.length ? group('Saved foods', saved.map(foodRow).join('')) : empty('No saved foods', 'Tap the star on any food to keep it here.');
     } else if (A.tab === 'meals') {
       html += S.meals.length ? '<div class="rows">' + S.meals.map(m => {
         const t = sum(m.items);
-        return '<div class="row"><button type="button" class="row-main" data-meal-id="' + m.id + '" data-a="meal"><div class="nm">' + esc(m.name) + '</div><div class="hd">' + m.items.length + ' items · ' + n0(t.kcal) + ' kcal</div><div class="mc">' + pcf(t) + '</div></button>'
-          + '<button type="button" class="circle ghost" data-meal-id="' + m.id + '" data-a="meal-del" aria-label="Delete ' + esc(m.name) + '">🗑</button>'
-          + '<button type="button" class="circle" data-meal-id="' + m.id + '" data-a="meal" aria-label="Add ' + esc(m.name) + '">+</button></div>';
-      }).join('') + '</div>' : '<div class="empty">Save a meal from the ⋯ menu on any meal.</div>';
+        return '<div class="row"><button type="button" class="row-main" data-meal-id="' + m.id + '" data-a="meal"><span class="l"><span class="nm">' + esc(m.name) + '</span><span class="hd">' + m.items.length + '\u00a0items\u00a0· ' + pcfNb(t) + '</span></span><span class="kc">' + n0(t.kcal) + '<small>kcal</small></span></button>'
+          + '<button type="button" class="icon-btn icon-btn--plain" data-meal-id="' + m.id + '" data-a="meal-del" aria-label="Delete ' + esc(m.name) + '">' + svg('trash') + '</button>'
+          + '<button type="button" class="circle" data-meal-id="' + m.id + '" data-a="meal" aria-label="Add ' + esc(m.name) + '">' + svg('plus') + '</button></div>';
+      }).join('') + '</div>' : empty('No saved meals', 'Log two or more foods in a meal, then tap the more button next to it and choose Save as meal.');
     } else {
       html += manualForm();
     }
@@ -823,7 +1122,7 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     } else if (a === 'meal') {
       const m = S.meals.find(x => x.id === b.dataset.mealId); if (!m) return;
       const fresh = m.items.map(it => Object.assign(clone(it), { id: uid(), date: A.date, meal: A.meal, ts: Date.now() / 1000 }));
-      const ids = new Set(fresh.map(x => x.id)); S.entries.push(...fresh); save(); closeAll();
+      const ids = new Set(fresh.map(x => x.id)); S.entries.push(...fresh); ids.forEach(id => V.fresh.add(id)); save(); closeAll();
       toast('Added ' + m.name + ' · ' + fresh.length + ' items', () => { S.entries = S.entries.filter(x => !ids.has(x.id)); });
     } else if (a === 'meal-del') {
       const m = S.meals.find(x => x.id === b.dataset.mealId); if (!m || !confirm('Delete saved meal “' + m.name + '”?')) return;
@@ -833,7 +1132,7 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
 
   function logEntry(food, pick, meal, date) {
     const e = { id: uid(), date, meal, name: displayName(food), base: pick.base, baseAmt: pick.baseAmt, unit: pick.unit, servings: pick.servings || [], servingLabel: pick.servingLabel, barcode: food.barcode || null, amount: pick.amount, ts: Date.now() / 1000, servingGrams: pick.servingGrams };
-    S.entries.push(e); return e;
+    S.entries.push(e); V.fresh.add(e.id); return e;
   }
   function flashAdded(key) { A.added[key] = true; setTimeout(() => { if (A) { delete A.added[key]; if ($('#addList')) renderAddList(); } }, 1200); }
   function quickAdd(food, key) {
@@ -843,26 +1142,26 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   }
   function addRecent(en, key) {
     const e = Object.assign(clone(en), { id: uid(), date: A.date, meal: A.meal, ts: Date.now() / 1000 });
-    S.entries.push(e); save(); render(); renderAddList(); renderAddFoot(); flashAdded(key);
+    S.entries.push(e); V.fresh.add(e.id); save(); render(); renderAddList(); renderAddFoot(); flashAdded(key);
     toast('Added ' + e.name + ' · ' + amtText(e), () => { S.entries = S.entries.filter(x => x.id !== e.id); });
   }
 
   // ---------- manual form ----------
   function manualForm() {
     const m = A.man;
-    const r = (id, label, v, ph, unit, wide, dot) => '<div class="frow"><label>' + (dot ? '<span class="dot" style="background:' + dot + '"></span>' : '') + label + '</label><input id="' + id + '" ' + (wide ? 'class="wide" type="text"' : 'inputmode="decimal"') + ' placeholder="' + ph + '" value="' + esc(v) + '">' + (unit ? '<span class="unit">' + unit + '</span>' : '') + '</div>';
+    const r = (id, label, v, ph, unit, wide, dot) => '<div class="frow"><label for="' + id + '">' + (dot ? '<span class="dot" style="background:' + dot + '"></span>' : '') + label + '</label><input id="' + id + '" ' + (wide ? 'class="wide" type="text"' : 'inputmode="decimal"') + ' placeholder="' + ph + '" value="' + esc(v) + '">' + (unit ? '<span class="unit">' + unit + '</span>' : '') + '</div>';
     return '<div class="form-card">' + r('mName', 'Name', m.name, 'Food name', '', true)
-      + '<div class="frow"><label>Values are per</label><div class="seg" style="width:170px" id="mPer"><button type="button" data-v="0" class="' + (m.per100 ? '' : 'on') + '">Serving</button><button type="button" data-v="1" class="' + (m.per100 ? 'on' : '') + '">100 g</button></div></div>'
+      + '<div class="frow"><label>Values are per</label><div class="seg row-seg-inline" id="mPer"><button type="button" data-v="0" class="' + (m.per100 ? '' : 'on') + '" aria-pressed="' + !m.per100 + '">Serving</button><button type="button" data-v="1" class="' + (m.per100 ? 'on' : '') + '" aria-pressed="' + m.per100 + '">100 g</button></div></div>'
       + r('mServing', m.per100 ? 'Serving label' : 'Serving', m.serving, '1 serving', '', true) + r('mServingG', 'Serving weight', m.servingG, 'optional', 'g')
       + r('mKcal', 'Calories', m.kcal, '0', 'kcal', false, 'var(--kcal)') + r('mP', 'Protein', m.p, '0', 'g', false, 'var(--protein)') + r('mC', 'Carbs', m.c, '0', 'g', false, 'var(--carbs)') + r('mF', 'Fat', m.f, '0', 'g', false, 'var(--fat)')
       + r('mBar', 'Barcode', m.barcode, 'optional', '', true)
-      + '<div class="frow"><label>Save to my foods</label><button type="button" class="switch' + (m.save ? ' on' : '') + '" id="mSave" aria-label="Save to my foods"></button></div></div>';
+      + '<div class="frow"><label for="mSave">Save to my foods</label><button type="button" class="switch' + (m.save ? ' on' : '') + '" id="mSave" role="switch" aria-checked="' + m.save + '"></button></div></div>';
   }
   function wireManual() {
     const m = A.man, bind = (id, k) => { const el = $('#' + id); if (el) el.oninput = e => { m[k] = e.target.value; }; };
     bind('mName', 'name'); bind('mServing', 'serving'); bind('mServingG', 'servingG'); bind('mKcal', 'kcal'); bind('mP', 'p'); bind('mC', 'c'); bind('mF', 'f'); bind('mBar', 'barcode');
     $('#mPer').onclick = e => { const b = e.target.closest('button'); if (!b) return; m.per100 = b.dataset.v === '1'; renderAddList(); };
-    $('#mSave').onclick = () => { m.save = !m.save; $('#mSave').classList.toggle('on', m.save); };
+    $('#mSave').onclick = () => { m.save = !m.save; $('#mSave').classList.toggle('on', m.save); $('#mSave').setAttribute('aria-checked', m.save); };
   }
   function manualGo() {
     const m = A.man, name = m.name.trim();
@@ -875,29 +1174,41 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     const food = m.per100
       ? { id: uid(), name, base, baseAmt: 100, unit: 'g', servings: sgOk ? [{ label: sl, grams: sgOk }] : [], barcode: bc }
       : { id: uid(), name, base, baseAmt: 1, unit: 'serving', servings: [], servingLabel: sl, servingGrams: sgOk, barcode: bc };
-    if (m.save && !isSaved(name)) { S.foods.unshift(food); save(); }
+    // Saving a name (or barcode) that's already saved updates that food rather than keeping the old values.
+    let was = -1;
+    if (m.save) { was = S.foods.findIndex(f => sameFood(f, food)); if (was >= 0) { food.id = S.foods[was].id; S.foods[was] = food; } else S.foods.unshift(food); save(); }
     openFood({ food, meal: A.meal, date: A.date, amount: wfmt(defaultAmount(food)) });
-    if (m.save) toast('Saved to my foods');
+    if (m.save) toast(was >= 0 ? 'Updated saved food' : 'Saved to my foods');
   }
 
   // ---------- barcode ----------
   function openBarcode() {
     const el = openSheet('Barcode', {
-      body: '<input class="field" id="bcIn" inputmode="numeric" placeholder="e.g. 5000159407236" maxlength="14"><div class="note" id="bcMsg">Looks the product up on Open Food Facts.</div>',
-      footer: '<button type="button" class="btn cta" id="bcGo">Look up</button>'
+      body: '<input class="field field--num" id="bcIn" inputmode="numeric" placeholder="e.g. 5000159407236" aria-label="Barcode number" maxlength="14" autocomplete="off" enterkeyhint="search"><div class="field-help" id="bcMsg">Looks the product up on Open Food Facts.</div>',
+      footer: '<button type="button" class="btn btn--primary btn--block btn--lg" id="bcGo">Look up</button>'
     });
-    $('#bcIn', el).focus();
+    const inp = $('#bcIn', el), msg = $('#bcMsg', el), btn = $('#bcGo', el);
+    inp.focus();
+    const say = (text, err) => { msg.textContent = text; msg.classList.toggle('is-error', !!err); };
     const go = async () => {
-      const code = $('#bcIn', el).value.replace(/\D/g, ''); const msg = $('#bcMsg', el);
-      if (code.length < 8) { msg.textContent = 'Enter the 8–14 digit number under the barcode.'; return; }
-      msg.textContent = 'Looking up…';
+      if (btn.disabled) return;
+      const code = inp.value.replace(/\D/g, '');
+      if (code.length < 8) return say('Enter the 8–14 digit number under the barcode.', true);
+      say('Looking up…'); btn.disabled = true;
       try {
         const f = await offBarcode(code);
-        if (!f) { msg.textContent = 'Not found. Add it manually instead.'; return; }
+        if (sheets[sheets.length - 1] !== el) return;   // closed while looking up
+        if (!f) {
+          // Not a dead end: hand the typed code to the manual form.
+          msg.innerHTML = 'Not on Open Food Facts. <button type="button" class="btn btn--sm btn--secondary">Add manually</button>'; msg.classList.add('is-error');
+          $('button', msg).onclick = () => { closeSheet(); A.man.barcode = code; A.tab = 'manual'; renderTabs(); renderAddList(); renderAddFoot(); };
+          return;
+        }
         closeSheet(); openFood({ food: f, meal: A.meal, date: A.date, amount: wfmt(defaultAmount(f)) });
-      } catch (e) { msg.textContent = 'Couldn’t reach Open Food Facts.'; }
+      } catch (e) { say('Couldn’t reach Open Food Facts. Check the connection and try again.', true); }
+      finally { btn.disabled = false; }
     };
-    $('#bcGo', el).onclick = go; $('#bcIn', el).onkeydown = e => { if (e.key === 'Enter') go(); };
+    btn.onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
   }
 
   // ---------- food sheet (portion + add/edit) ----------
@@ -908,17 +1219,17 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     if (!F.inGrams && fo.servingLabel) { const i = us.findIndex(u => u.label === fo.servingLabel); if (i >= 0) F.unitIdx = i; }
     // Re-logging a "recent" entry that was in servings of a gram food: keep its portion.
     const askWeight = perGram(fo) == null;
-    const star = () => isSaved(fo.name) ? '★' : '☆';
     const editing = !!F.editId;
-    const head = editing ? '<button type="button" class="icon-btn" data-x="del" aria-label="Delete entry">🗑</button>' : '<button type="button" class="icon-btn" data-x="star" aria-label="Save food" style="font-size:17px">' + star() + '</button>';
+    const head = editing ? '<button type="button" class="icon-btn row-danger" data-x="del" aria-label="Delete entry">' + svg('trash') + '</button>'
+      : '<button type="button" class="icon-btn" data-x="star" aria-label="Save food" aria-pressed="' + isSaved(fo) + '">' + svg('star', isSaved(fo)) + '</button>';
     const src = [fo.brand, fo.source === 'off' ? 'Open Food Facts' : null].filter(Boolean).join(' · ');
     const el = openSheet(editing ? 'Edit entry' : 'Add food', {
       headRight: head,
       body: '<div class="f-title">' + esc(fo.name) + '</div>' + (src ? '<div class="f-src">' + esc(src) + '</div>' : '')
-        + '<div id="fNut"></div><div id="fPortion" style="display:flex;flex-direction:column;gap:10px"></div><div id="fWeight"></div>'
-        + '<div style="display:flex;flex-direction:column;gap:8px"><div class="group-label">Meal</div><div class="seg" id="fMeal">' + MEALS.map(m => '<button type="button" data-m="' + m.id + '" class="' + (m.id === F.meal ? 'on' : '') + '">' + m.label + '</button>').join('') + '</div></div>'
-        + '<div class="proj" id="fProj"></div>',
-      footer: '<button type="button" class="btn cta" id="fGo"></button>'
+        + '<div id="fNut"></div><div id="fPortion" class="row-group"></div><div id="fWeight"></div>'
+        + '<div class="row-group"><div class="group-label">Meal</div><div class="seg" id="fMeal">' + MEALS.map(m => '<button type="button" data-m="' + m.id + '" class="' + (m.id === F.meal ? 'on' : '') + '" aria-pressed="' + (m.id === F.meal) + '">' + m.label + '</button>').join('') + '</div></div>',
+      // The "After this" line sits right above the button, so every portion change shows its effect on the day.
+      footer: '<div class="row-foot-proj" id="fProj"></div><button type="button" class="btn btn--primary btn--block btn--lg" id="fGo"></button>'
     });
 
     const cur = () => {
@@ -929,14 +1240,15 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     };
     const mringHtml = (lab, key, color, n) => {
       const t = S.targets[key], fr = t > 0 ? n[key] / t : 0, C = 2 * Math.PI * 17;
-      return '<div class="mring"><div class="r"><svg viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="17"/><circle class="p" cx="20" cy="20" r="17" stroke="' + color + '" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' + (C * (1 - Math.min(1, fr))).toFixed(1) + '"/></svg><span style="color:' + color + '">' + lab[0] + '</span></div><div class="g">' + n0(n[key]) + '<small> g</small></div><div class="nmz">' + lab + '</div></div>';
+      // Ring = share of the daily target; the centre carries the grams.
+      return '<div class="mring" role="img" aria-label="' + lab + ' ' + n0(n[key]) + ' g, ' + Math.round(fr * 100) + '% of daily target"><div class="r"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="t" cx="20" cy="20" r="17"/><circle class="p" cx="20" cy="20" r="17" stroke="' + color + '" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' + (C * (1 - Math.min(1, fr))).toFixed(1) + '"/></svg><span aria-hidden="true">' + n0(n[key]) + '<small>g</small></span></div><div class="nmz" aria-hidden="true">' + lab + '</div></div>';
     };
     const projection = n => {
       const orig = F.editId ? S.entries.find(x => x.id === F.editId) : null;
       const day = orig ? orig.date : F.date;
       let t = eaten(day); if (orig) t = add(t, scale(nut(orig), -1));
       const tg = S.targets, kl = tg.kcal - t.kcal - n.kcal, pl = tg.p - t.p - n.p;
-      return 'After this: ' + (kl >= 0 ? n0(kl) + ' kcal left' : n0(-kl) + ' kcal over') + ' · ' + (pl >= 0.5 ? n0(pl) + ' g protein left' : 'protein target met') + (day !== Day.today() ? ' · ' + Day.fmt(day) : '');
+      return { text: 'After this: ' + (kl >= 0 ? n0(kl) + ' kcal left' : n0(-kl) + ' kcal over') + ' · ' + (pl >= 0.5 ? n0(pl) + ' g protein left' : 'protein target met') + (day !== Day.today() ? ' · ' + Day.fmt(day) : ''), over: kl < 0 };
     };
     const quickAmounts = (g, us2) => {
       if (!g) return [0.5, 1, 1.5, 2].map(x => [wfmt(x) + ' ×', x]);
@@ -948,28 +1260,28 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     const paintDynamic = () => {
       const c = cur();
       $('#fNut', el).innerHTML = '<div class="nrow"><div class="kc">' + n0(c.n.kcal) + '<small>kcal</small></div><div class="mrings">' + mringHtml('Protein', 'p', 'var(--protein)', c.n) + mringHtml('Carbs', 'c', 'var(--carbs)', c.n) + mringHtml('Fat', 'f', 'var(--fat)', c.n) + '</div></div>';
-      $('#fProj', el).textContent = projection(c.n);
+      const pj = projection(c.n), fp = $('#fProj', el); fp.textContent = pj.text; fp.classList.toggle('is-over', pj.over);
       const go = $('#fGo', el); go.textContent = editing ? 'Save changes' : 'Add to ' + mealLabel(F.meal) + ' · ' + n0(c.n.kcal) + ' kcal';
-      const eq = $('#fEq', el); if (eq) eq.textContent = (!c.g && c.u && c.u.grams && c.a > 0) ? '= ' + wfmt(Math.round(c.a * c.u.grams)) + ' g' : '';
-      el.querySelectorAll('[data-qa]').forEach(b => b.classList.toggle('on', c.a === Number(b.dataset.qa)));
+      const eq = $('#fEq', el); if (eq) eq.textContent = (!c.g && c.u && c.u.grams && c.a > 0) ? '= ' + wfmt(Math.round(c.a * c.u.grams)) + ' g · ' : '';
+      el.querySelectorAll('[data-qa]').forEach(b => { const on = c.a === Number(b.dataset.qa); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
     };
     const paintPortion = () => {
       const c = cur(), chips = quickAmounts(c.g, c.us), step = c.g ? 10 : 0.5;
       const perM = c.g ? (c.pg ? scale(c.pg, 100) : null) : (c.u ? unitMacros(F.food, c.u) : null);
       const per = perM ? (c.g ? 'Per 100 g · ' : 'Per ' + (c.u ? c.u.label : 'serving') + ' · ') + n0(perM.kcal) + ' kcal · ' + pcf(perM) : '';
       $('#fPortion', el).innerHTML = '<div class="group-label">Portion</div>'
-        + (c.pg && c.us.length ? '<div class="seg" id="fMode"><button type="button" data-g="1" class="' + (c.g ? 'on' : '') + '">Grams</button><button type="button" data-g="0" class="' + (c.g ? '' : 'on') + '">Servings</button></div>' : '')
-        + (!c.g && c.us.length > 1 ? '<div class="chips" id="fUnits">' + c.us.map((u, i) => '<button type="button" class="chip' + (i === F.unitIdx ? ' on' : '') + '" data-u="' + i + '">' + esc(u.label + (u.grams && !/ g$/.test(u.label) ? ' · ' + wfmt(u.grams) + ' g' : '')) + '</button>').join('') + '</div>' : '')
-        + '<div class="stepper"><button type="button" class="circle" data-step="' + -step + '" aria-label="Less">−</button><div class="amt"><input id="fAmt" inputmode="decimal" value="' + esc(F.amount) + '" aria-label="' + (c.g ? 'Amount in grams' : 'Number of servings') + '"><span>' + (c.g ? 'g' : '× ' + esc(c.u ? c.u.label : 'serving')) + '</span></div><button type="button" class="circle" data-step="' + step + '" aria-label="More">+</button></div>'
-        + '<div class="chips">' + chips.map(q => '<button type="button" class="chip" data-qa="' + q[1] + '">' + esc(q[0]) + '</button>').join('') + '</div>'
-        + '<div class="note" id="fEq" style="color:var(--text-secondary)"></div>' + (per ? '<div class="proj">' + esc(per) + '</div>' : '');
+        + (c.pg && c.us.length ? '<div class="seg" id="fMode"><button type="button" data-g="1" class="' + (c.g ? 'on' : '') + '" aria-pressed="' + c.g + '">Grams</button><button type="button" data-g="0" class="' + (c.g ? '' : 'on') + '" aria-pressed="' + !c.g + '">Servings</button></div>' : '')
+        + (!c.g && c.us.length > 1 ? '<div class="chips" id="fUnits">' + c.us.map((u, i) => '<button type="button" class="chip' + (i === F.unitIdx ? ' on' : '') + '" data-u="' + i + '" aria-pressed="' + (i === F.unitIdx) + '">' + esc(u.label + (u.grams && !/ g$/.test(u.label) ? ' · ' + wfmt(u.grams) + ' g' : '')) + '</button>').join('') + '</div>' : '')
+        + '<div class="stepper"><button type="button" class="circle" data-step="' + -step + '" aria-label="Less">' + svg('minus') + '</button><label class="amt" for="fAmt"><input id="fAmt" inputmode="decimal" value="' + esc(F.amount) + '" aria-label="' + (c.g ? 'Amount in grams' : 'Number of servings') + '"><span>' + (c.g ? 'g' : '× ' + esc(c.u ? c.u.label : 'serving')) + '</span></label><button type="button" class="circle" data-step="' + step + '" aria-label="More">' + svg('plus') + '</button></div>'
+        + '<div class="chips">' + chips.map(q => '<button type="button" class="chip" data-qa="' + q[1] + '" aria-pressed="false">' + esc(q[0]) + '</button>').join('') + '</div>'
+        + '<div class="row-portion-help"><span id="fEq"></span>' + esc(per) + '</div>';
       const inp = $('#fAmt', el);
       inp.oninput = () => { F.amount = inp.value; paintDynamic(); };
     };
     const paintWeight = () => {
       const w = $('#fWeight', el); if (!askWeight) { w.innerHTML = ''; return; }
       const u = units(F.food)[0];
-      w.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px"><div class="group-label">Log in grams</div><div class="form-card"><div class="frow"><label>1 ' + esc(u ? u.label.replace(/^1 /, '') : 'serving') + ' weighs</label><input id="fW" inputmode="decimal" placeholder="—" value="' + esc(F.weightText) + '"><span class="unit">g</span></div></div><div class="note">' + (F.food.servingGrams ? 'Now you can pick Grams under Portion.' : 'Add one serving’s weight to log it in grams too.') + '</div></div>';
+      w.innerHTML = '<div class="row-group"><div class="group-label">Log in grams</div><div class="form-card"><div class="frow"><label for="fW">1 ' + esc(u ? u.label.replace(/^1 /, '') : 'serving') + ' weighs</label><input id="fW" inputmode="decimal" placeholder="—" value="' + esc(F.weightText) + '"><span class="unit">g</span></div></div><div class="field-help">' + (F.food.servingGrams ? 'Now you can pick Grams under Portion.' : 'Add one serving’s weight to log it in grams too.') + '</div></div>';
       $('#fW', el).oninput = e => {
         F.weightText = e.target.value; const x = num(e.target.value); const had = !!F.food.servingGrams;
         F.food.servingGrams = x > 0 ? x : null;
@@ -990,13 +1302,13 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
         F.inGrams = grams; paintPortion(); paintDynamic();
       }
       else if ((b = t.closest('[data-u]'))) { F.unitIdx = Number(b.dataset.u); paintPortion(); paintDynamic(); }
-      else if ((b = t.closest('#fMeal button'))) { F.meal = b.dataset.m; el.querySelectorAll('#fMeal button').forEach(x => x.classList.toggle('on', x === b)); paintDynamic(); }
+      else if ((b = t.closest('#fMeal button'))) { F.meal = b.dataset.m; el.querySelectorAll('#fMeal button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); paintDynamic(); }
       else if ((b = t.closest('[data-x]'))) {
         if (b.dataset.x === 'star') {
-          const mine = S.foods.find(f => f.name === fo.name);
+          const mine = S.foods.find(f => sameFood(f, fo));
           if (mine) { S.foods = S.foods.filter(f => f.id !== mine.id); toast('Removed from saved foods'); }
           else { const nf = clone(F.food); nf.id = uid(); S.foods.unshift(nf); toast('Saved to my foods'); }
-          save(); b.textContent = star();
+          save(); b.setAttribute('aria-pressed', isSaved(fo)); b.innerHTML = svg('star', isSaved(fo));
         } else {
           const old = S.entries.find(x => x.id === F.editId); if (!old) return;
           S.entries = S.entries.filter(x => x.id !== F.editId); save(); closeSheet();
@@ -1007,7 +1319,7 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
     $('#fGo', el).onclick = () => {
       const c = cur(); if (!c.pick || !(num(c.pick.amount) > 0)) return toast('Enter an amount above 0');
       // A serving weight added here sticks to the saved food, so grams work next time too.
-      if (F.food.servingGrams) { const sf = S.foods.find(x => x.name === F.food.name && x.unit === 'serving' && !x.servingGrams); if (sf) sf.servingGrams = F.food.servingGrams; }
+      if (F.food.servingGrams) { const sf = S.foods.find(x => sameFood(x, F.food) && x.unit === 'serving' && !x.servingGrams); if (sf) sf.servingGrams = F.food.servingGrams; }
       if (editing) {
         const i = S.entries.findIndex(x => x.id === F.editId); if (i < 0) return;
         const old = clone(S.entries[i]);
@@ -1023,7 +1335,22 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   }
 
   // ---------- init ----------
-  window.addEventListener('storage', () => { S = load(); refresh(); });
+  // Another tab or the cloud sync changed food_v1: reload S at once (every later save starts from it), then
+  // redraw. While a field is focused the redraw waits for blur (and for the tap that caused it), so nothing
+  // is rebuilt under the finger mid-typing.
+  let blurWait = null;
+  function reloadFromStorage() {
+    S = load();
+    if (blurWait) { blurWait.el.removeEventListener('blur', blurWait.fn); blurWait = null; }
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) {
+      const fn = () => { blurWait = null; setTimeout(refresh, 0); };
+      a.addEventListener('blur', fn, { once: true }); blurWait = { el: a, fn };
+      return;
+    }
+    refresh();
+  }
+  window.addEventListener('storage', e => { if (e.key == null || e.key === LS_KEY) reloadFromStorage(); });
   // Tab left open overnight: follow the calendar if the user was looking at "today".
   let seenToday = Day.today();
   function rollDay() { const t = Day.today(); if (t !== seenToday) { if (V.date === seenToday) V.date = t; seenToday = t; refresh(); } }
@@ -1032,7 +1359,7 @@ button { font-family: inherit; color: inherit; -webkit-tap-highlight-color: tran
   document.addEventListener('DOMContentLoaded', () => {
     try { if (window.self !== window.top) return; } catch (e) { return; }
     if (typeof initCloudSync !== 'function') return;
-    initCloudSync({ appKey: 'food', syncedKeys: [LS_KEY], onApplied: function () { S = load(); refresh(); } });
+    initCloudSync({ appKey: 'food', syncedKeys: [LS_KEY], onApplied: reloadFromStorage });
   });
   render();
 })();
