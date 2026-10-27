@@ -4,746 +4,872 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050506">
-<title>Hannes Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<title>Today</title>
+<!-- defer: first paint no longer waits on the CDN (offline / cold cache). Deferred scripts
+     still run in this order before DOMContentLoaded, when both initCloudSync calls run. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
 <script src="sync.js" defer></script>
 <script src="topbar.js" defer></script>
 <style>
+/* ===================== row-tokens v1 =====================
+   Paste as the FIRST rule of each page's first <style>, identical on every page.
+   Then the page overrides only the 4 --accent* lines (see per-page accents).
+   Contrast numbers are measured on --surface-1 over --bg (≈ #101011). */
 :root {
-  --text-primary: #FAFAFA;
-  --text-secondary: #B8B6B0;
-  --text-tertiary: #8A8781;
-  --success: #6BE3A4;
-  --warning: #F2C063;
-  --danger: #FF6B6B;
-  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+
+  /* ---- Base canvas (flat: no radial washes, no grain, no drift) ---- */
+  --bg: #050506;                         /* page; also <meta name="theme-color"> on every page */
+  --bg-elevated: #141416;                /* OPAQUE: sheets, modals, menus, workout session, overlays */
+  --bg-chrome: rgba(8, 8, 9, 0.78);      /* top bar / tab bar / finance nav, always with --blur-material */
+
+  /* ---- Surfaces: translucent white so they stack on any base (incl. inside the water iframe) ---- */
+  --surface-1: rgba(255, 255, 255, 0.045);   /* card                       ≈ #101011 */
+  --surface-2: rgba(255, 255, 255, 0.065);   /* row / field / tile in card ≈ #202020 */
+  --surface-3: rgba(255, 255, 255, 0.10);    /* tonal button, pressed row  ≈ #282829 */
+  --surface-active: rgba(255, 255, 255, 0.14); /* selected segment */
+  --surface-sunken: rgba(0, 0, 0, 0.28);     /* legacy recessed well (being phased out for --surface-2) */
+  --track: rgba(255, 255, 255, 0.08);        /* progress bar / ring track */
+
+  /* ---- Lines ---- */
+  --hairline: rgba(255, 255, 255, 0.06);       /* list separators, chrome edges */
+  --border: rgba(255, 255, 255, 0.08);         /* card/control edge where one is needed */
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --control-border: rgba(255, 255, 255, 0.36); /* unchecked checkbox ring: 3.3:1 (WCAG 1.4.11) */
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05); /* the "glass lip" on cards */
+
+  /* ---- Text (warm neutrals) ---- */
+  --text-1: #FAFAFA;   /* primary          16.9:1 */
+  --text-2: #B8B6B0;   /* secondary         9.4:1 */
+  --text-3: #94918A;   /* tertiary, placeholders: ≥5.0:1 on surface-2, 4.7:1 on surface-3. Lowest level for anything that carries information */
+  --text-4: #5E5C57;   /* 2.9:1 — disabled + purely decorative glyphs ONLY, never information */
+  --text-on-light: #0A0A0B; /* ink on porcelain / accent fills (16:1 on porcelain, ≥6.5:1 on every accent) */
+
+  /* ---- Porcelain: the one primary-button material, shared by every page ---- */
+  --porcelain: #F4F1EA;
+  --porcelain-fill: linear-gradient(180deg, #FFFFFF 0%, #ECE9E2 100%); /* subtle material sheen, buttons only */
+
+  /* ---- Semantic status (used only for status, never as decoration) ---- */
+  --positive: #6BE3A4;  --positive-tint: rgba(107, 227, 164, 0.14);  /* 11.9:1 */
+  --warning:  #F2C063;  --warning-tint:  rgba(242, 192, 99, 0.14);   /* 11.3:1 */
+  --negative: #FF6B6B;  --negative-tint: rgba(255, 107, 107, 0.14);  /* 6.9:1, 5.7:1 on its tint */
+
+  /* ---- Feature hues: each domain owns one; reused wherever that domain appears ---- */
+  --hue-day:     #E07658;  /* Main: Day Ring, goals: ember   6.3:1 (5.3:1 on its tint) */
+  --hue-health:  #7DD3FC;  /* Health stack + Water + top-bar water pill: sky  11.4:1 */
+  --hue-food:    #F4F1EA;  /* Food: kcal: porcelain  16.9:1 */
+  --hue-fitness: #6BE3A4;  /* Fitness: mint  11.9:1 */
+  --hue-finance: #B58CFF;  /* Finance: violet  7.4:1 (6.1:1 on its tint) */
+  --protein: #5CC8FF;  --carbs: #F2B04A;  --fat: #B58CFF;  /* macro DATA colours: bars/dots only */
+  --data-1: #7DD3FC; --data-2: #6BE3A4; --data-3: #F2C063; --data-4: #B58CFF; --data-5: #E07658; /* finance categories / donut */
+
+  /* ---- Page accent (each page overrides these four lines) ---- */
+  --accent: var(--hue-day);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(224, 118, 88, 0.14);
+  --accent-ring: rgba(224, 118, 88, 0.60);   /* focus outline + focused field border */
+
+  /* ---- Type ---- */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-micro: 11px;     /* eyebrows, tab labels, tags, axis labels (floor: nothing smaller) */
+  --fs-caption: 12px;   /* row meta, helper text, mono sub-lines */
+  --fs-footnote: 13px;  /* secondary text, segment/chip labels, field labels */
+  --fs-body: 15px;      /* body, list-row titles, buttons */
+  --fs-headline: 17px;  /* sheet titles, emphasized row values, large buttons */
+  --fs-title-3: 20px;   /* "/ 7" denominators next to a hero, card titles */
+  --fs-title-2: 22px;   /* secondary stat, food item name in sheet */
+  --fs-title-1: 28px;   /* page title (26px at ≤360px) */
+  --fs-display: 34px;   /* secondary hero (e.g. kcal on Main's food card, wishlist total) */
+  --fs-hero: 48px;      /* the ONE number per screen */
+  --fs-input: 16px;     /* every input/select/textarea: iOS will not zoom */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; /* 800 retired */
+  --lh-tight: 1.05; --lh-snug: 1.25; --lh-body: 1.45;
+  --tracking-hero: -0.035em; --tracking-title: -0.022em; --tracking-body: -0.005em;
+  --tracking-eyebrow: 0.08em;  /* was 0.14–0.22em in 9 variants */
+
+  /* ---- Space (4pt grid) ---- */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-7: 28px; --space-8: 32px; --space-10: 40px;
+  --gutter: 16px;        /* page side gutter (20px ≥481px) */
+  --card-pad: 16px;      /* (20px ≥481px) */
+  --card-gap: 12px;      /* between stacked cards */
+  --section-gap: 28px;   /* above a section label */
+  --page-max: 640px;
+  --tap: 44px;           /* minimum hit target */
+
+  /* ---- Radii (5 values; replaces 13 in gym alone) ---- */
+  --radius-xs: 6px;      /* tiny inner marks only */
+  --radius-sm: 8px;      /* tiles, tags-in-rows, chart corners */
+  --radius-md: 12px;     /* fields, segmented control, inset groups, toast, large checkbox */
+  --radius-lg: 18px;     /* cards, grouped lists */
+  --radius-xl: 26px;     /* bottom-sheet top corners */
+  --radius-pill: 999px;  /* buttons, chips, tags, bars */
+
+  /* ---- Elevation (no glows anywhere) ---- */
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 24px 64px rgba(0, 0, 0, 0.60);
+  --shadow-porcelain: inset 0 1px 0 rgba(255, 255, 255, 0.70), 0 1px 2px rgba(0, 0, 0, 0.40), 0 6px 16px rgba(0, 0, 0, 0.30);
+  --blur-material: saturate(1.6) blur(20px);  /* chrome, sheets' scrim-free bars, toasts only */
+
+  /* ---- Motion ---- */
+  --dur-instant: 100ms;   /* press scale */
+  --dur-fast: 160ms;      /* colour/background changes */
+  --dur-base: 240ms;      /* toggles, fades, check pop, ticker crossfade */
+  --dur-slow: 360ms;      /* sheets, overlays */
+  --dur-progress: 600ms;  /* bar/ring fills */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* checkmark pop only */
+
+  /* ---- Layout & layers ---- */
+  --topbar-h: 52px;  --tabbar-h: 56px;
+  --z-chrome: 40; --z-session: 80; --z-sheet: 100; --z-viewer: 200; --z-toast: 250; --z-camera: 300;
+
+  /* ================= Legacy aliases =================
+     So existing rules adopt the system without renaming. */
+  --text-primary: var(--text-1);  --text-secondary: var(--text-2);
+  --text-tertiary: var(--text-3); --text-quaternary: var(--text-4);
+  --success: var(--positive); --danger: var(--negative);
+  --good: var(--positive); --warn: var(--warning); --bad: var(--negative); --info: var(--hue-health);
+  --bg-deep: var(--bg);
+  --bg-card: #111113;  /* opaque on purpose: gym/po-water also paint MODALS with --bg-card; visually = surface-1 on --bg */
+  --bg-secondary: var(--surface-2); --bg-input: var(--surface-2); --bg-input-focus: var(--surface-2);
+  --bg-dropdown: var(--bg-elevated);
+  --card: var(--surface-1); --field: var(--surface-2); --hair: var(--border); --border-soft: var(--hairline);
+  --glass-bg: var(--surface-1); --glass-border: transparent; --glass-border-strong: transparent;
+  --glass-shadow: var(--shadow-card);
+  --kcal: var(--hue-food);
+  --warning-bg: var(--warning-tint); --tag-stack: var(--warning); --tag-stack-bg: var(--warning-tint);
+  --accent-glow: transparent;
+  /* finance --radius-sm (8) / --radius-md (12) map 1:1; finance --radius-lg 16 → 18 */
+}
+@media (min-width: 481px) { :root { --gutter: 20px; --card-pad: 20px; } }
+@media (max-width: 360px) { :root { --fs-title-1: 26px; --fs-hero: 44px; } }
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-instant: 0ms; --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; --dur-progress: 0ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+  }
+}
+/* ===================== /row-tokens v1 ===================== */
+/* Main's accent: ember (Day Ring, checks, goal bar, Next tag, streak) */
+:root {
+  --accent: var(--hue-day);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(224, 118, 88, 0.14);
+  --accent-ring: rgba(224, 118, 88, 0.60);
 }
 
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0;
-  background: #050506;
-  color: var(--text-secondary);
-  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-2);
+  font: var(--fw-regular) var(--fs-body)/var(--lh-body) var(--font);
+  letter-spacing: var(--tracking-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 }
-body {
-  min-height: 100vh;
-  position: relative;
-  overflow-x: hidden;
-  padding: max(28px, env(safe-area-inset-top)) 20px 60px;
-}
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  background:
-    radial-gradient(circle at 82% 14%, rgba(224, 118, 88, 0.16), transparent 45%),
-    radial-gradient(circle at 18% 90%, rgba(180, 180, 200, 0.06), transparent 50%);
-  filter: blur(40px);
-  pointer-events: none;
-  z-index: -2;
-  animation: drift 36s ease-in-out infinite alternate;
-}
-body::after {
-  content: '';
-  position: fixed; inset: 0;
-  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
-  background-size: 3px 3px;
-  pointer-events: none;
-  z-index: -1;
-}
-@keyframes drift {
-  0%   { transform: translate3d(0,0,0); }
-  100% { transform: translate3d(-22px, 14px, 0); }
+/* No top/side padding on <body>: topbar.js owns safe-area-top and the bottom padding,
+   .page owns the gutter. clip (not hidden) so body never becomes a scroll container. */
+body { min-height: 100dvh; overflow-x: clip; }
+/* Jumps to an anchor (the ticker's tap) stop below the sticky top bar, not under it. */
+html { scroll-padding-top: calc(var(--topbar-h) + env(safe-area-inset-top)); }
+input, select, textarea { font-size: var(--fs-input); }   /* 16px: iOS doesn't zoom on focus */
+button { font-family: inherit; }
+:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+::selection { background: var(--accent-tint); color: var(--text-1); }
+a, button, input, select, textarea, label, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+[hidden] { display: none !important; }
+.row-sr-only {
+  position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
 .page {
-  max-width: 1100px;
+  max-width: var(--page-max);
   margin: 0 auto;
+  padding: var(--space-3) calc(var(--gutter) + env(safe-area-inset-right)) var(--space-8) calc(var(--gutter) + env(safe-area-inset-left));
 }
 
-/* ===== Component 1: page title ===== */
+/* ===== Page header ===== */
+.row-page-head { margin: var(--space-2) 0 var(--space-5); }
 .dash-title {
-  margin: 0 0 14px;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  margin: 0;
+  font: var(--fw-bold) var(--fs-title-1)/1.1 var(--font-display);
+  letter-spacing: var(--tracking-title);
+  color: var(--text-1);
 }
-@media (max-width: 480px) { .dash-title { font-size: 22px; } }
-
-/* ===== Component 2: Goal Ticker ===== */
-.ticker-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 4px;
-  margin-bottom: 18px;
-}
-.goal-ticker {
-  position: relative; overflow: hidden;
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 12px;
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.30) 100%),
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 3px);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-}
-.goal-ticker::after {
-  content: '';
-  position: absolute; top: 0; bottom: 0;
-  width: 30%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
-  pointer-events: none;
-  animation: ticker-sweep 8s linear infinite;
-}
-@keyframes ticker-sweep {
-  0%   { left: -40%; }
-  100% { left: 110%; }
-}
-.goal-ticker-led { display: inline-flex; align-items: center; }
-.goal-ticker-led-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #6BE3A4;
-  box-shadow: 0 0 8px rgba(107,227,164,0.7);
-  animation: led-pulse 1.6s ease-in-out infinite;
-}
-@keyframes led-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.45; transform: scale(0.85); }
-}
-.goal-ticker-label {
-  font-family: var(--font-mono);
-  font-size: 9.5px; font-weight: 800;
-  letter-spacing: 0.18em;
-  color: var(--text-tertiary);
-}
-.goal-ticker-stage {
-  position: relative; overflow: hidden;
-  flex: 1; height: 22px;
-}
-.goal-ticker-row {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 12.5px; font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-  white-space: nowrap;
-  opacity: 1;
-  transition: opacity 0.22s ease;
-}
-.goal-ticker-row.is-fading { opacity: 0; }
-.goal-ticker-status {
-  display: inline-flex; justify-content: center;
-  width: 18px;
-  color: var(--text-tertiary);
-}
-.goal-ticker-status[data-status="done"]    { color: var(--success); }
-.goal-ticker-status[data-status="pending"] { color: var(--text-tertiary); }
-.goal-ticker-text {
-  flex: 1;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.goal-ticker-meta {
-  font-family: var(--font-mono);
-  font-size: 11px; font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.04);
-}
-@media (max-width: 480px) {
-  .goal-ticker { padding: 9px 12px; }
-  .goal-ticker-label { font-size: 9px; letter-spacing: 0.14em; }
-  .goal-ticker-row { font-size: 12px; }
-  .goal-ticker-meta { font-size: 10px; padding: 2px 7px; }
+.row-page-sub {
+  min-height: 1.3em;
+  margin-top: var(--space-1);
+  font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font-mono);
+  color: var(--text-3);
 }
 
-/* ===== Component 3: Day Ring ===== */
-.day-ring-wrap {
-  display: flex; flex-wrap: wrap;
-  align-items: center; justify-content: center;
-  gap: 26px;
-  padding: 22px;
-  margin-bottom: 22px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
-}
-.day-ring {
+/* ===== Cards (one card style for the Day, Calories and To-do cards) ===== */
+.day-ring-wrap, .cal-card, .gm-card {
   position: relative;
-  width: 168px; height: 168px;
-  flex-shrink: 0;
+  margin: 0 0 var(--card-gap);
+  padding: var(--card-pad);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card);
 }
-.day-ring svg { width: 100%; height: 100%; display: block; }
-.day-ring-track { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 8; }
+
+/* ===== Day card: Day Ring (the screen's hero) + goal ticker ===== */
+.day-ring-wrap { padding: var(--space-5); }
+.day-ring { position: relative; width: 208px; height: 208px; margin: 0 auto; }
+.day-ring svg { display: block; width: 100%; height: 100%; }
+.day-ring-track { fill: none; stroke: var(--track); stroke-width: 8; }
 .day-ring-fill {
   fill: none;
+  stroke: var(--accent);
   stroke-width: 8;
   stroke-linecap: round;
   transform: rotate(-90deg);
   transform-origin: 60px 60px;
-  transition: stroke 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-              stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: stroke-dashoffset var(--dur-progress) var(--ease-out);
 }
+.day-ring-wrap.is-late .day-ring-fill { stroke: var(--negative); }
 .day-ring-overlay {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   pointer-events: none;
 }
-.day-ring-percent {
-  font-size: 40px; font-weight: 800;
+.row-day-hero {
+  font: var(--fw-bold) var(--fs-hero)/var(--lh-tight) var(--font-display);
+  letter-spacing: var(--tracking-hero);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
-  color: var(--text-primary);
-  line-height: 1;
+  color: var(--text-1);
+  white-space: nowrap;
 }
-.day-ring-phase {
-  margin-top: 5px;
-  font-family: var(--font-mono);
-  font-size: 9.5px; font-weight: 800;
-  letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--text-tertiary);
+.row-day-hero .unit {
+  margin: 0 8px 0 2px;
+  font: var(--fw-medium) var(--fs-headline)/1 var(--font);
+  letter-spacing: 0;
+  color: var(--text-3);
 }
-.day-ring-clock {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
+.row-day-hero .unit:last-child { margin-right: 0; }
+.row-day-hero.is-long { font-size: 44px; }
+.row-day-cap {
+  margin-top: var(--space-1);
+  font: var(--fw-medium) var(--fs-footnote)/1.2 var(--font);
+  color: var(--text-2);
 }
-.day-ring-text {
-  display: flex; flex-direction: column;
-  gap: 6px;
-  max-width: 280px;
+.day-ring-wrap.is-late .row-day-cap { color: var(--negative); }
+.row-day-span {
+  min-height: 1.3em;
+  margin-top: var(--space-3);
+  text-align: center;
+  font: var(--fw-medium) var(--fs-caption)/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
 }
-.day-ring-status { font-size: 14px; font-weight: 700; color: var(--text-primary); }
-.day-ring-remaining { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
-.day-ring-hours { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
-@media (max-width: 480px) {
-  .day-ring { width: 144px; height: 144px; }
-  .day-ring-percent { font-size: 32px; }
-  .day-ring-status { font-size: 13px; }
-}
+@media (max-width: 360px) { .row-day-hero.is-long { font-size: 40px; } }
 
+/* Ticker: the next goal under the hero; tap jumps to the list (or the composer) */
+.goal-ticker {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: var(--tap);
+  margin-top: var(--space-4);
+  padding: 0 14px;
+  border: 0; border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font: var(--fw-medium) var(--fs-footnote)/1.2 var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.goal-ticker:active { background: var(--surface-3); }
+.goal-ticker-led {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 14px; height: 14px;
+  color: var(--accent);
+}
+.goal-ticker-led[data-status="empty"] { color: var(--text-3); }
+.goal-ticker-led svg { display: block; width: 14px; height: 14px; }
+.goal-ticker-led-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.goal-ticker-text {
+  flex: 1; min-width: 0;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+.goal-ticker-text.is-fading { opacity: 0; }
+.goal-ticker-meta {
+  font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.goal-ticker-meta:empty { display: none; }
+
+/* ===== Section labels ===== */
+.section-title {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+  margin: var(--section-gap) var(--space-1) var(--space-2);
+  font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.section-title .meta {
+  font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0; text-transform: none;
+  color: var(--text-3);
+}
 
 /* ===== Calories card (links to food.html) ===== */
 .cal-card {
-  display: block; position: relative; overflow: hidden; text-decoration: none; color: inherit;
-  background: rgba(255,255,255,0.04); border-radius: 16px; padding: 16px 18px;
-  backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.45); margin-bottom: 18px;
-  -webkit-tap-highlight-color: transparent; transition: transform 0.12s;
+  display: block;
+  color: inherit; text-decoration: none;
+  transition: transform var(--dur-instant) var(--ease-out);
 }
-.cal-card:active { transform: scale(0.99); }
-.cal-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 90% at 0% 0%, rgba(224,118,88,0.12), transparent 70%); pointer-events: none; }
-.cal-card > * { position: relative; }
-.cal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.cal-big { font-size: 34px; font-weight: 800; letter-spacing: -0.04em; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
-.cal-big small { font-size: 12px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0; margin-left: 5px; }
-.cal-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
-.cal-bar { height: 7px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; margin: 12px 0 12px; }
-.cal-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #C7C4BC, #FFFFFF); box-shadow: 0 0 10px rgba(255,255,255,0.22); transition: width 0.6s cubic-bezier(0.22,1,0.36,1); }
-.cal-bar.over > i { background: linear-gradient(90deg, #FF9A9A, var(--danger)); }
-.cal-macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.cal-mac-lab { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
-.cal-mac-val { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); margin-top: 3px; white-space: nowrap; }
-.cal-mac-val small { font-size: 10.5px; font-weight: 500; color: var(--text-tertiary); }
-.cal-mac-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.07); margin-top: 6px; overflow: hidden; }
-.cal-mac-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; transition: width 0.6s cubic-bezier(0.22,1,0.36,1); }
-
-/* ===== Component 4: section + To Do List ===== */
-.section { margin-top: 8px; }
-.section-title {
-  font-size: 10.5px; font-weight: 700;
-  letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--text-tertiary);
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 12px;
-}
-.section-title::before {
-  content: ''; width: 18px; height: 1px;
-  background: var(--text-tertiary); opacity: 0.6;
-}
-.section-title::after {
-  content: ''; flex: 1; height: 1px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent);
-}
-
-.gm-card {
-  position: relative;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 14px;
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
-  transition: background 0.4s;
-  overflow: hidden;
-}
-.gm-card.gm-all-done::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: radial-gradient(circle at 50% 0%, rgba(107,227,164,0.10), transparent 60%);
-  pointer-events: none;
-}
-.gm-card.gm-all-done .gm-progress-num,
-.gm-card.gm-all-done .gm-progress-label { color: var(--success); }
-
-.gm-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  flex-wrap: wrap; gap: 12px;
-  margin-bottom: 14px;
-  position: relative;
-}
-.gm-header-left { display: flex; flex-direction: column; }
-.gm-eyebrow {
-  font-size: 10.5px; font-weight: 700;
-  letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-bottom: 6px;
-}
-.gm-progress-row { display: flex; align-items: baseline; gap: 6px; }
-.gm-progress-num {
-  font-size: 42px; font-weight: 700;
+.cal-card:active { transform: scale(0.98); }
+.cal-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-3); }
+.cal-big {
+  min-width: 0;
+  font: var(--fw-bold) var(--fs-display)/var(--lh-tight) var(--font-display);
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.045em;
-  color: var(--text-primary);
-  line-height: 1;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+.cal-big .unit {
+  margin-left: 6px;
+  font: var(--fw-medium) var(--fs-body)/1 var(--font);
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+.cal-card.is-over .cal-big .unit { color: var(--negative); }
+.cal-meta {
+  display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0;
+  font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.cal-meta.is-empty { font-family: var(--font); }
+.cal-meta svg { display: block; width: 16px; height: 16px; }
+.cal-bar { height: 6px; margin: var(--space-3) 0; border-radius: var(--radius-pill); background: var(--track); overflow: hidden; }
+.cal-bar > i {
+  display: block; width: 0; height: 100%;
+  border-radius: inherit;
+  background: var(--hue-food);
+  transition: width var(--dur-progress) var(--ease-out);
+}
+.cal-bar.over > i { background: var(--negative); }
+.cal-macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.cal-mac-lab {
+  font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.cal-mac-val {
+  margin-top: var(--space-1);
+  font: var(--fw-semibold) var(--fs-body)/1.2 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.cal-mac-val small { font-size: var(--fs-caption); font-weight: var(--fw-medium); color: var(--text-3); }
+.cal-mac-bar { height: 4px; margin-top: 6px; border-radius: var(--radius-pill); background: var(--track); overflow: hidden; }
+.cal-mac-bar > i {
+  display: block; width: 0; height: 100%;
+  border-radius: inherit;
+  transition: width var(--dur-progress) var(--ease-out);
+}
+.cal-mac-bar.mac-p > i { background: var(--protein); }
+.cal-mac-bar.mac-c > i { background: var(--carbs); }
+.cal-mac-bar.mac-f > i { background: var(--fat); }
+
+/* ===== To-do cards (Today + Tomorrow) ===== */
+/* The ticker scrolls here: html scroll-padding-top clears the bar, this keeps the label in view */
+#todoSection { scroll-margin-top: var(--space-3); }
+.gm-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: nowrap; gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.gm-progress-row {
+  display: flex; align-items: baseline;
+  font: var(--fw-bold) var(--fs-title-2)/1.1 var(--font-display);
+  letter-spacing: var(--tracking-title);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+  white-space: nowrap;
 }
 .gm-progress-total {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  color: var(--text-tertiary);
+  margin-left: 4px;
+  font: var(--fw-medium) var(--fs-body)/1 var(--font-mono);
+  letter-spacing: 0;
+  color: var(--text-3);
 }
 .gm-progress-label {
-  font-size: 11px; font-weight: 600;
-  letter-spacing: 0.10em; text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-left: 4px;
+  margin-left: 6px;
+  font: var(--fw-medium) var(--fs-footnote)/1 var(--font);
+  letter-spacing: 0;
+  color: var(--text-3);
 }
-.gm-tomorrow-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
-.gm-tomorrow-count {
-  font-family: var(--font-mono);
-  font-size: 11px; font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--text-tertiary);
-}
-.gm-card-tomorrow .gm-progress-row { display: none; }
+.gm-card.gm-all-done .gm-progress-label { color: var(--accent); }
 
+/* Streak tag: only shown once there is a streak */
 .gm-streak {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
-  color: var(--text-tertiary);
-  font-size: 11px; font-weight: 600;
-  letter-spacing: 0.10em; text-transform: uppercase;
-  transition: background 0.25s, color 0.25s, border-color 0.25s;
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  height: 22px; padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-micro)/1 var(--font);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
-.gm-streak-icon { font-size: 13px; }
-.gm-streak-num {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.gm-streak.gm-streak-active {
-  background: rgba(242,192,99,0.10);
-  color: #F2C063;
-  border-color: rgba(242,192,99,0.32);
-}
-.gm-streak.gm-streak-active .gm-streak-icon {
-  filter: drop-shadow(0 0 6px rgba(242,192,99,0.6));
-}
+.gm-streak svg { display: block; width: 14px; height: 14px; }
+.gm-streak-num { font-variant-numeric: tabular-nums; }
 
-.gm-bar {
-  display: flex; gap: 4px;
-  height: 6px;
-  margin-bottom: 16px;
-}
+/* Segmented goal bar: one segment per goal */
+.gm-bar { display: flex; gap: 3px; height: 4px; margin-bottom: var(--space-1); }
 .gm-bar:empty { display: none; }
-.gm-bar-seg {
-  flex: 1;
-  background: rgba(255,255,255,0.06);
-  border-radius: 3px;
-  transition: background 0.3s, box-shadow 0.3s;
-}
-.gm-bar-seg-done {
-  background: #6BE3A4;
-  box-shadow: 0 0 6px rgba(107,227,164,0.40);
-}
+.gm-bar > i { flex: 1; border-radius: 2px; background: var(--track); transition: background-color var(--dur-fast) var(--ease-out); }
+.gm-bar > i.on { background: var(--accent); }
 
-.goal-list { list-style: none; margin: 0; padding: 0; }
-.empty-state {
-  text-align: center;
-  font-size: 12px; font-style: italic;
-  color: var(--text-tertiary);
-  padding: 14px 0;
-}
-
+/* Goal rows: an inset list that runs edge to edge inside the card */
+.goal-list { list-style: none; margin: var(--space-2) calc(-1 * var(--card-pad)) 0; padding: 0; }
+.goal-list:empty { display: none; }
 .gm-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px;
-  margin-bottom: 6px;
-  background: rgba(255,255,255,0.035);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px;
-  transition: background 0.2s, opacity 0.3s;
   position: relative;
+  display: flex; align-items: center; gap: 2px;
+  min-height: 52px;
+  padding: 4px 4px 4px 6px;
 }
-.gm-row:hover { background: rgba(255,255,255,0.06); }
-.gm-row.gm-row-done {
-  opacity: 0.45;
-  background: rgba(107,227,164,0.04);
+.gm-row + .gm-row::before {
+  content: '';
+  position: absolute; top: 0; left: 52px; right: var(--card-pad);
+  height: 1px;
+  background: var(--hairline);
 }
-.gm-row.gm-row-done .gm-text {
-  text-decoration: line-through;
-  text-decoration-color: rgba(255,255,255,0.4);
-}
-.gm-row.gm-row-queued {
-  background: rgba(242,192,99,0.10);
-  box-shadow: inset 3px 0 0 0 #F2C063;
-}
-.gm-row.gm-row-queued .gm-text { color: #FFE2A8; }
-.gm-row.is-drag-over { border-top: 2px solid #6BE3A4; }
-.gm-row.is-queue-flashing { animation: gm-queue-flash 0.48s ease-out; }
-@keyframes gm-queue-flash {
-  0%   { background: rgba(255,255,255,0.035); transform: scale(1); }
-  40%  { background: rgba(242,192,99,0.32); transform: scale(1.015); }
-  100% { background: rgba(255,255,255,0.035); transform: scale(1); }
-}
+.gm-row.is-drag-over { box-shadow: inset 0 2px 0 var(--accent); }
+@media (hover: hover) and (pointer: fine) { .gm-row[draggable="true"] { cursor: grab; } }
 
-.gm-handle {
-  width: 14px; flex-shrink: 0;
-  color: var(--text-tertiary);
-  font-weight: 700; font-size: 14px;
-  letter-spacing: -2px;
-  cursor: grab;
-  opacity: 0;
-  transition: opacity 0.2s;
-  user-select: none;
-}
-.gm-row:hover .gm-handle { opacity: 1; }
-.gm-handle:active { cursor: grabbing; }
-
-.gm-check {
-  appearance: none; -webkit-appearance: none;
-  width: 22px; height: 22px; flex-shrink: 0;
-  margin: 0;
-  border: 1.5px solid rgba(255,255,255,0.18);
-  background: rgba(0,0,0,0.28);
-  border-radius: 7px;
-  position: relative;
+/* Checkbox: 24px circle inside a 44px label, so the whole 44px square toggles it
+   (a margin alone doesn't take taps). */
+.row-check-hit {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: var(--tap); height: var(--tap);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.25s;
 }
-.gm-check:checked {
-  background: #6BE3A4;
-  border-color: #6BE3A4;
-  box-shadow: 0 0 12px rgba(107,227,164,0.40);
+.row-check-hit:has(.gm-check:disabled) { cursor: default; }
+.gm-check {
+  -webkit-appearance: none; appearance: none;
+  position: relative; flex-shrink: 0;
+  width: 24px; height: 24px;
+  margin: 0;
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
 }
+.gm-check:checked { background: var(--accent); border-color: var(--accent); }
 .gm-check:checked::after {
   content: '';
-  position: absolute; left: 6px; top: 2px;
+  position: absolute; left: 7px; top: 3px;
   width: 6px; height: 11px;
-  border: solid #0A0A0B;
-  border-width: 0 2.5px 2.5px 0;
+  border: solid var(--accent-ink);
+  border-width: 0 2.2px 2.2px 0;
   transform: rotate(45deg);
-  animation: gm-check-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+.gm-check.is-pop:checked::after { animation: gm-check-pop var(--dur-base) var(--ease-spring); }
 @keyframes gm-check-pop {
   from { transform: rotate(45deg) scale(0); }
   to   { transform: rotate(45deg) scale(1); }
 }
-.gm-check:disabled { cursor: not-allowed; opacity: 0.55; }
+/* Tomorrow's goals: locked until 6 AM */
+.gm-check:disabled { cursor: default; border-style: dashed; border-color: var(--text-4); }
 
+.row-goal-body { flex: 1; min-width: 0; padding: 10px 0; cursor: text; }
 .gm-text {
-  flex: 1;
-  font-size: 14px;
-  color: var(--text-primary);
-  cursor: text;
+  font: var(--fw-semibold) var(--fs-body)/1.3 var(--font);
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-sm);
   outline: none;
-  border-radius: 4px;
-  padding: 2px 4px;
-  margin: -2px -4px;
 }
+/* Editing in place: 16px so iOS doesn't zoom into the contenteditable */
 .gm-text[contenteditable="true"] {
-  outline: 1px solid rgba(255,255,255,0.18);
-  background: rgba(0,0,0,0.28);
+  display: block;
+  margin: -6px -8px;
+  padding: 6px 8px;
+  font-size: var(--fs-input);
+  font-weight: var(--fw-regular);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1.5px var(--accent-ring);
+  caret-color: var(--accent);
+  text-decoration: none;
+  color: var(--text-1);
+  -webkit-user-select: text; user-select: text;
 }
+.gm-row.gm-row-done .gm-text:not([contenteditable="true"]) {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.30);
+}
+.row-tag-next {
+  display: inline-flex; align-items: center;
+  height: 22px; margin-left: 6px; padding: 0 8px;
+  vertical-align: 1px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-micro)/1 var(--font);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.row-goal-body:has(.gm-text[contenteditable="true"]) .row-tag-next { display: none; }
 
-.gm-queue-btn {
-  border: 0; background: transparent;
-  color: var(--text-tertiary);
-  font-size: 14px;
+/* One trailing "more" button per row (opens the goal sheet) */
+.row-more-btn {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: var(--tap); height: var(--tap);
+  padding: 0; border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-3);
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 6px;
-  opacity: 0.55;
-  transition: opacity 0.2s, color 0.2s, transform 0.1s;
+  transition: background-color var(--dur-fast), transform var(--dur-instant) var(--ease-out);
 }
-.gm-queue-btn:hover { opacity: 1; }
-.gm-queue-btn.gm-queue-active {
-  color: #F2C063;
-  opacity: 1;
-  filter: drop-shadow(0 0 4px rgba(242,192,99,0.65));
-}
-.gm-queue-btn:disabled { cursor: not-allowed; opacity: 0.3; }
+.row-more-btn:active { transform: scale(0.94); background: var(--surface-3); }
+.row-more-btn svg { display: block; width: 20px; height: 20px; }
 
-.goal-delete {
-  border: 0; background: transparent;
-  color: var(--text-tertiary);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 4px;
-  opacity: 0.5;
-  transition: opacity 0.2s, color 0.2s;
+/* Empty state */
+.empty-state { padding: var(--space-5) var(--space-4) var(--space-2); text-align: center; }
+.row-empty-title { font: var(--fw-semibold) var(--fs-body)/1.3 var(--font); color: var(--text-1); }
+.row-empty-body {
+  max-width: 32ch;
+  margin: var(--space-1) auto 0;
+  font: var(--fw-regular) var(--fs-footnote)/var(--lh-body) var(--font);
+  color: var(--text-3);
 }
-.gm-row:hover .goal-delete { opacity: 1; }
-.goal-delete:hover { color: var(--danger); }
 
+/* Show more / Show less */
+.gm-more-li { padding: var(--space-1) var(--card-pad) 0; }
 .gm-show-toggle {
-  width: 100%;
-  margin: 6px 0 0;
-  padding: 9px;
-  border: 1px dashed rgba(255,255,255,0.12);
-  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+  width: 100%; min-height: var(--tap);
+  padding: 0 var(--space-5);
+  border: 0; border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--text-tertiary);
-  font-family: inherit;
-  font-size: 11px; font-weight: 600;
-  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-2);
+  font: var(--fw-semibold) var(--fs-footnote)/1 var(--font);
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
+  transition: background-color var(--dur-fast);
 }
-.gm-show-toggle:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.22); }
+.gm-show-toggle:active { background: var(--surface-2); }
+.gm-show-toggle svg { display: block; width: 16px; height: 16px; transition: transform var(--dur-base) var(--ease-out); }
+.gm-show-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 
+/* Move unfinished to tomorrow */
 .gm-push-btn {
-  width: 100%;
-  margin-top: 14px;
-  padding: 11px;
-  border: 1px dashed rgba(255,255,255,0.16);
-  border-radius: 12px;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-family: inherit;
-  font-size: 11px; font-weight: 700;
-  letter-spacing: 0.10em; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  min-height: var(--tap);
+  margin-top: var(--space-1);
+  padding: 0;
+  border: 0; background: none;
+  color: var(--text-2);
+  font: var(--fw-semibold) var(--fs-footnote)/1 var(--font);
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  transition: opacity var(--dur-fast);
 }
-.gm-push-btn:hover {
-  color: var(--text-primary);
-  border-color: rgba(255,255,255,0.30);
-  border-style: solid;
-  background: rgba(255,255,255,0.04);
-}
+.gm-push-btn:active { opacity: 0.6; }
+.gm-push-btn svg { display: block; width: 18px; height: 18px; }
 
-.goal-input-wrap.gm-input-wrap {
-  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255,255,255,0.06);
-}
+/* Composer: one field + icon buttons on one line */
+.gm-input-wrap { display: flex; align-items: stretch; gap: var(--space-2); margin-top: var(--space-3); }
+.gm-card-tomorrow .goal-list:empty + .gm-input-wrap { margin-top: 0; }
+/* No header above Tomorrow's rows: pull them up so the first one isn't sunk 38px into the card */
+.gm-card-tomorrow .goal-list { margin-top: calc(-1 * var(--space-2)); }
 .gm-input {
   flex: 1; min-width: 0;
-  padding: 11px 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  background: rgba(0,0,0,0.28);
-  color: var(--text-primary);
-  font-family: inherit; font-size: 14px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font: var(--fw-regular) var(--fs-input)/1.25 var(--font);
+  caret-color: var(--accent);
   outline: none;
-  transition: border-color 0.2s, background 0.2s;
+  -webkit-appearance: none; appearance: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
-.gm-input::placeholder { color: var(--text-tertiary); }
-.gm-input:focus { border-color: rgba(255,255,255,0.28); background: rgba(0,0,0,0.36); }
-
-.gm-add {
-  padding: 11px 20px;
-  border: 0; border-radius: 12px;
-  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%);
-  color: #0A0A0B;
-  font-family: inherit; font-size: 13px; font-weight: 700;
+.gm-input::placeholder { color: var(--text-3); }
+.gm-input:focus { border-color: var(--accent-ring); }
+.gm-input:focus-visible { outline: none; }
+.gm-add, .gm-polish {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 48px; height: 48px;
+  padding: 0; border: 0;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.9),
-    0 2px 8px rgba(0,0,0,0.35),
-    0 8px 22px rgba(0,0,0,0.25);
-  transition: transform 0.1s, filter 0.15s;
+  transition: opacity var(--dur-fast), transform var(--dur-instant) var(--ease-out);
 }
-.gm-add:hover { filter: brightness(1.06); transform: translateY(-1px); }
-.gm-add:active { transform: translateY(0); }
+.gm-add { background: var(--accent-tint); color: var(--accent); }
+.gm-polish { background: transparent; color: var(--text-3); }
+.gm-add:active, .gm-polish:active { transform: scale(0.94); }
+.gm-add:disabled, .gm-polish:disabled { opacity: 0.4; cursor: default; transform: none; }
+.gm-add svg, .gm-polish svg { display: block; width: 20px; height: 20px; }
+.row-field-help {
+  margin: 6px 2px 0;
+  font: var(--fw-regular) var(--fs-caption)/1.4 var(--font);
+  color: var(--text-3);
+}
 
-.gm-polish {
-  padding: 11px 18px;
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 12px;
-  background: rgba(255,255,255,0.04);
-  color: var(--text-primary);
-  font-family: inherit; font-size: 13px; font-weight: 600;
+/* ===== Goal sheet (Mark as next / Edit / Delete) ===== */
+/* Lock page scroll on <html> only: hidden on <body> would make it a scroll container
+   and unstick the top bar. */
+html.row-sheet-open { overflow: hidden; }
+.row-sheet-overlay {
+  position: fixed; inset: 0; z-index: var(--z-sheet);
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  overscroll-behavior: contain;
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+.row-sheet-overlay:not(.in) { pointer-events: none; }
+.row-sheet-overlay.in { background: rgba(0, 0, 0, 0.55); }
+.row-sheet {
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 560px;
+  max-height: calc(100dvh - max(44px, env(safe-area-inset-top)) - 8px);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-raised);
+  transform: translateY(100%);
+  transition: transform var(--dur-slow) var(--ease-sheet);
+}
+.row-sheet-overlay.in .row-sheet { transform: none; }
+.row-sheet-grab { width: 36px; height: 5px; margin: 6px auto 0; border-radius: 3px; background: rgba(255, 255, 255, 0.22); }
+.row-sheet-head {
+  display: grid; grid-template-columns: 64px 1fr 64px; align-items: center;
+  min-height: 52px; padding: 0 var(--space-2);
+}
+.row-sheet-head h2 {
+  margin: 0; text-align: center;
+  font: var(--fw-semibold) var(--fs-headline)/1.2 var(--font);
+  color: var(--text-1);
+}
+.row-sheet-close {
+  position: relative;
+  display: inline-grid; place-items: center;
+  width: 30px; height: 30px; margin: 7px;
+  padding: 0; border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-2);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
 }
-.gm-polish:hover {
-  background: rgba(255,255,255,0.07);
-  border-color: rgba(255,255,255,0.18);
+.row-sheet-close::after { content: ''; position: absolute; inset: -7px; }
+.row-sheet-close svg { display: block; width: 16px; height: 16px; }
+.row-sheet-body {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-1) var(--gutter) calc(var(--space-5) + env(safe-area-inset-bottom));
 }
+.row-sheet-text {
+  margin: 0 var(--space-1);
+  font: var(--fw-semibold) var(--fs-body)/1.3 var(--font);
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.row-sheet-list { border-radius: var(--radius-lg); background: var(--surface-1); overflow: hidden; }
+.row-sheet-act {
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: 52px;
+  padding: 0 var(--space-4);
+  border: 0; background: transparent;
+  color: var(--text-1);
+  font: var(--fw-semibold) var(--fs-body)/1.3 var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.row-sheet-act + .row-sheet-act::before {
+  content: '';
+  position: absolute; top: 0; left: 48px; right: 0;
+  height: 1px;
+  background: var(--hairline);
+}
+.row-sheet-act:active { background: var(--surface-2); }
+.row-sheet-act svg { display: block; width: 20px; height: 20px; flex-shrink: 0; color: var(--text-2); }
+.row-sheet-act.is-danger, .row-sheet-act.is-danger svg { color: var(--negative); }
 
-.gm-status {
-  flex-basis: 100%;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  min-height: 14px;
-  margin-top: 4px;
+/* ===== Toast (Undo) ===== */
+.row-toast {
+  position: fixed; left: 50%;
+  bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom));
+  z-index: var(--z-toast);
+  display: flex; align-items: center; gap: var(--space-4);
+  min-height: 48px;
+  max-width: calc(100vw - 2 * var(--gutter));
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(38, 38, 42, 0.92);
+  -webkit-backdrop-filter: var(--blur-material); backdrop-filter: var(--blur-material);
+  box-shadow: var(--shadow-raised);
+  color: var(--text-1);
+  font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+  pointer-events: none;
 }
-.gm-status.gm-status-error { color: var(--danger); }
-
-@media (max-width: 480px) {
-  body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
-  .gm-card { padding: 16px; }
-  .gm-progress-num { font-size: 36px; }
-}
-/* iOS Safari zooms the page when focusing an input under 16px */
-@media (max-width: 768px) {
-  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea { font-size: 16px !important; }
+.row-toast:empty { display: none; }
+.row-toast.in { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.row-toast span { min-width: 0; }
+.row-toast button {
+  min-height: var(--tap);
+  margin-right: calc(-1 * var(--space-3));
+  padding: 0 var(--space-3);
+  border: 0; background: none;
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-footnote) var(--font);
+  cursor: pointer;
 }
 </style>
 </head>
 <body>
-<div class="page">
+<main class="page">
 
-  <h1 class="dash-title">Hannes Dashboard</h1>
+  <header class="row-page-head">
+    <h1 class="dash-title">Today</h1>
+    <div class="row-page-sub" id="pageSub"></div>
+  </header>
 
-  <div class="ticker-row">
-    <div class="goal-ticker" id="goalTicker" aria-live="polite" aria-atomic="true">
-      <div class="goal-ticker-led"><span class="goal-ticker-led-dot"></span></div>
-      <div class="goal-ticker-label">GOALS</div>
-      <div class="goal-ticker-stage" id="goalTickerStage">
-        <div class="goal-ticker-row">
-          <span class="goal-ticker-status" data-status="">—</span>
-          <span class="goal-ticker-text">Loading…</span>
-        </div>
-      </div>
-      <div class="goal-ticker-meta" id="goalTickerMeta">0/0</div>
-    </div>
-  </div>
-
-  <div class="day-ring-wrap">
-    <div class="day-ring">
-      <svg viewBox="0 0 120 120">
-        <defs>
-          <filter id="dayRingGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2.4" result="b" />
-            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
+  <!-- DAY: time left today is the screen's one number; the next goal sits under it -->
+  <section class="day-ring-wrap" id="dayCard" aria-label="Your day">
+    <div class="day-ring" id="dayRing" role="img" aria-label="Day progress">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
         <circle class="day-ring-track" cx="60" cy="60" r="52" />
-        <circle class="day-ring-fill"  cx="60" cy="60" r="52" id="dayRingFill" filter="url(#dayRingGlow)" />
+        <circle class="day-ring-fill"  cx="60" cy="60" r="52" id="dayRingFill" />
       </svg>
-      <div class="day-ring-overlay">
-        <div class="day-ring-percent" id="dayRingPercent">—</div>
-        <div class="day-ring-phase"   id="dayRingPhase">—</div>
-        <div class="day-ring-clock"   id="dayRingClock">—</div>
+      <div class="day-ring-overlay" aria-hidden="true">
+        <div class="row-day-hero" id="dayRingHero">—</div>
+        <div class="row-day-cap"  id="dayRingCap"></div>
       </div>
     </div>
-    <div class="day-ring-text">
-      <div class="day-ring-status"    id="dayRingStatus">Loading…</div>
-      <div class="day-ring-remaining" id="dayRingRemaining">—</div>
-      <div class="day-ring-hours">8:00 AM – 12:00 AM</div>
-    </div>
-  </div>
+    <div class="row-day-span" id="dayRingSpan"></div>
+    <button type="button" class="goal-ticker" id="goalTicker">
+      <span class="goal-ticker-led" id="goalTickerLed" aria-hidden="true"></span>
+      <span class="goal-ticker-text" id="goalTickerText"></span>
+      <span class="goal-ticker-meta" id="goalTickerMeta" aria-hidden="true"></span>
+    </button>
+  </section>
 
-  <div class="section">
-    <div class="section-title">Calories</div>
-    <a class="cal-card" href="food.html" id="calCard" aria-label="Open the food tracker">
+  <section class="section" aria-labelledby="calLabel">
+    <h2 class="section-title" id="calLabel">Calories</h2>
+    <a class="cal-card" href="food.html" id="calCard">
       <div class="cal-top">
-        <div class="cal-big"><span id="calBig">—</span><small id="calUnit">kcal left</small></div>
-        <div class="cal-meta" id="calMeta">Tap to log food</div>
+        <div class="cal-big"><span id="calBig">—</span><span class="unit" id="calUnit">kcal left</span></div>
+        <div class="cal-meta"><span id="calMeta">Nothing logged</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></div>
       </div>
       <div class="cal-bar" id="calBar"><i></i></div>
       <div class="cal-macros">
-        <div><div class="cal-mac-lab">Protein</div><div class="cal-mac-val" id="calP">—</div><div class="cal-mac-bar"><i id="calPb" style="background:#5CC8FF"></i></div></div>
-        <div><div class="cal-mac-lab">Carbs</div><div class="cal-mac-val" id="calC">—</div><div class="cal-mac-bar"><i id="calCb" style="background:#F2B04A"></i></div></div>
-        <div><div class="cal-mac-lab">Fat</div><div class="cal-mac-val" id="calF">—</div><div class="cal-mac-bar"><i id="calFb" style="background:#B58CFF"></i></div></div>
+        <div><div class="cal-mac-lab">Protein</div><div class="cal-mac-val" id="calP">—</div><div class="cal-mac-bar mac-p"><i id="calPb"></i></div></div>
+        <div><div class="cal-mac-lab">Carbs</div><div class="cal-mac-val" id="calC">—</div><div class="cal-mac-bar mac-c"><i id="calCb"></i></div></div>
+        <div><div class="cal-mac-lab">Fat</div><div class="cal-mac-val" id="calF">—</div><div class="cal-mac-bar mac-f"><i id="calFb"></i></div></div>
       </div>
+      <span class="row-sr-only">, open food tracker</span>
     </a>
-  </div>
+  </section>
 
-  <div class="section">
-    <div class="section-title">To Do List</div>
-
-    <!-- TODAY -->
+  <!-- TODAY -->
+  <section class="section" id="todoSection" aria-labelledby="todoLabel">
+    <h2 class="section-title" id="todoLabel">To do</h2>
     <div class="gm-card" id="gmCardToday">
-      <div class="gm-header">
-        <div class="gm-header-left">
-          <div class="gm-eyebrow" id="todayLabel">Today —</div>
-          <div class="gm-progress-row">
-            <span class="gm-progress-num"   id="gmProgressNum">0</span>
-            <span class="gm-progress-total" id="gmProgressTotal">/ 0</span>
-            <span class="gm-progress-label" id="gmProgressLabel">no goals yet</span>
-          </div>
+      <div class="gm-header" id="gmHeader" hidden>
+        <div class="gm-progress-row" id="gmProgressRow">
+          <span class="gm-progress-num"   id="gmProgressNum">0</span>
+          <span class="gm-progress-total" id="gmProgressTotal">/ 0</span>
+          <span class="gm-progress-label" id="gmProgressLabel">done</span>
         </div>
-        <div class="gm-streak" id="gmStreak">
-          <span class="gm-streak-icon">⚡</span>
-          <span class="gm-streak-num" id="gmStreakNum">0</span>
-          <span>day streak</span>
-        </div>
+        <span class="gm-streak" id="gmStreak" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          <span><span class="gm-streak-num" id="gmStreakNum">0</span>-day streak</span>
+        </span>
       </div>
-      <div class="gm-bar" id="gmBar"></div>
-      <ul id="goalList" class="goal-list gm-list"></ul>
-      <div id="emptyState" class="empty-state">No goals for today yet — add one below.</div>
-      <button type="button" id="gmPushBtn" class="gm-push-btn" style="display:none;">Push remaining to tomorrow</button>
-      <div class="goal-input-wrap gm-input-wrap">
-        <input id="goalInput" class="gm-input" type="text" placeholder="Add a goal for today…" autocomplete="off">
-        <button type="button" id="goalAddBtn"    class="gm-add">+ Add</button>
-        <button type="button" id="goalPolishBtn" class="gm-polish">✨ Polish</button>
-        <div class="gm-status" id="polishStatus"></div>
+      <div class="gm-bar" id="gmBar" aria-hidden="true"></div>
+      <ul id="goalList" class="goal-list" aria-label="Today's goals"></ul>
+      <div id="emptyState" class="empty-state">
+        <div class="row-empty-title">No goals yet</div>
+        <div class="row-empty-body">Add one below. Unfinished goals roll over to the next day.</div>
+      </div>
+      <button type="button" id="gmPushBtn" class="gm-push-btn" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        <span id="gmPushLabel">Move unfinished to tomorrow</span>
+      </button>
+      <div class="gm-input-wrap">
+        <input id="goalInput" class="gm-input" type="text" placeholder="Add a goal" enterkeyhint="done" autocomplete="off" aria-label="New goal for today">
+        <button type="button" id="goalPolishBtn" class="gm-polish" aria-label="Polish wording and add" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 21 9-9"/><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M17.8 6.2 19 5"/><path d="M12.2 6.2 11 5"/></svg></button>
+        <button type="button" id="goalAddBtn" class="gm-add" aria-label="Add goal" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
     </div>
+  </section>
 
-    <!-- PLAN TOMORROW -->
+  <!-- PLAN TOMORROW -->
+  <section class="section" aria-labelledby="tomorrowLabel">
+    <h2 class="section-title" id="tomorrowLabel">Tomorrow <span class="meta" id="gmTomorrowCount"></span></h2>
     <div class="gm-card gm-card-tomorrow" id="gmCardTomorrow">
-      <div class="gm-header">
-        <div class="gm-header-left">
-          <div class="gm-eyebrow" id="tomorrowLabel">Plan tomorrow —</div>
-          <div class="gm-tomorrow-sub">Write tonight, locked until 6 AM.</div>
-        </div>
-        <div class="gm-tomorrow-count" id="gmTomorrowCount">0 planned</div>
+      <ul id="tomorrowList" class="goal-list" aria-label="Goals planned for tomorrow"></ul>
+      <div class="gm-input-wrap">
+        <input id="tomorrowInput" class="gm-input" type="text" placeholder="Plan a goal for tomorrow" enterkeyhint="done" autocomplete="off" aria-label="New goal for tomorrow">
+        <button type="button" id="tomorrowPolishBtn" class="gm-polish" aria-label="Polish wording and add" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 21 9-9"/><path d="M15 4V2"/><path d="M15 16v-2"/><path d="M8 9h2"/><path d="M20 9h2"/><path d="M17.8 11.8 19 13"/><path d="M17.8 6.2 19 5"/><path d="M12.2 6.2 11 5"/></svg></button>
+        <button type="button" id="tomorrowAddBtn" class="gm-add" aria-label="Add goal for tomorrow" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
-      <ul id="tomorrowList" class="goal-list gm-list"></ul>
-      <div id="tomorrowEmpty" class="empty-state">Nothing planned for tomorrow yet</div>
-      <div class="goal-input-wrap gm-input-wrap">
-        <input id="tomorrowInput" class="gm-input" type="text" placeholder="Add a goal for tomorrow…" autocomplete="off">
-        <button type="button" id="tomorrowAddBtn"    class="gm-add">+ Add</button>
-        <button type="button" id="tomorrowPolishBtn" class="gm-polish">✨ Polish</button>
-        <div class="gm-status" id="tomorrowStatus"></div>
+      <p class="row-field-help">Locked until 6 AM. Check them off tomorrow.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- Goal actions sheet (replaces the per-row queue and delete buttons) -->
+<div class="row-sheet-overlay" id="goalSheet" hidden>
+  <div class="row-sheet" role="dialog" aria-modal="true" aria-labelledby="goalSheetTitle">
+    <div class="row-sheet-grab" aria-hidden="true"></div>
+    <div class="row-sheet-head">
+      <button type="button" class="row-sheet-close" id="goalSheetClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h2 id="goalSheetTitle">Goal</h2>
+      <span></span>
+    </div>
+    <div class="row-sheet-body">
+      <p class="row-sheet-text" id="goalSheetText"></p>
+      <div class="row-sheet-list">
+        <button type="button" class="row-sheet-act" data-act="next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span id="goalSheetNextLabel">Mark as next</span></button>
+        <button type="button" class="row-sheet-act" data-act="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span>Edit</span></button>
+        <button type="button" class="row-sheet-act is-danger" data-act="delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="m19 6-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"/><path d="M10 11v6M14 11v6"/></svg><span>Delete</span></button>
       </div>
     </div>
   </div>
-
 </div>
+
+<div class="row-toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
   'use strict';
 
-  // Paste your Anthropic key here to enable ✨ Polish. Empty = falls back to plain add.
+  // Polish rewrites a goal with Claude before adding it. Keep this empty: this file is
+  // served as-is, so a key here would be readable by anyone who opens the page. With no
+  // key the Polish button stays hidden and goals are added as typed.
   const ANTHROPIC_API_KEY = '';
 
   const WAKE_HOUR  = 6.5;  // 06:30
@@ -792,7 +918,7 @@ body::after {
     const d = new Date(parts[0], parts[1] - 1, parts[2]);
     const wk = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
     const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-    return wk + ', ' + mo + ' ' + d.getDate();
+    return wk + ' ' + d.getDate() + ' ' + mo;   // "Tue 27 Oct", same as food's Day.fmt
   }
 
   function todayKey()    { return 'goals:' + getActiveDateString(); }
@@ -804,26 +930,76 @@ body::after {
   }
   function setGoals(key, list) { storeSet(key, list); }
 
+  // A row's idx can be stale if the list changed underneath it (cloud sync, another
+  // tab): trust idx only while the text still matches, else find the goal by text.
+  function findGoal(list, idx, text) {
+    if (list[idx] && list[idx].text === text) return idx;
+    return list.findIndex(g => g && g.text === text);
+  }
+
+  function hasPastGoalKeys() {
+    const t = getActiveDateString();
+    return storeListKeys('goals:').some(k => k.slice('goals:'.length) < t);
+  }
+
   // ---------- rollover: pull undone older goals into today ----------
+  // Returns the undone goals it found, as [{ from: 'goals:<date>', text }].
   function rollover() {
     const todayDateStr = getActiveDateString();
     const todayK = 'goals:' + todayDateStr;
     let today = getGoals(todayK);
     const texts = new Set(today.map(g => g.text));
+    let carried = false;
+    const found = [];
 
     storeListKeys('goals:').forEach(k => {
       const dateStr = k.slice('goals:'.length);
       if (dateStr >= todayDateStr) return;
       const old = getGoals(k);
       old.forEach(g => {
+        if (!g.done && g.text) found.push({ from: k, text: g.text });
         if (!g.done && g.text && !texts.has(g.text)) {
           today.push({ text: g.text, done: false });
           texts.add(g.text);
+          carried = true;
         }
       });
       storeDelete(k);
     });
-    setGoals(todayK, today);
+    // Only write when something carried over, so a no-op rollover doesn't create an
+    // empty key or trigger a sync push.
+    if (carried) setGoals(todayK, today);
+    return found;
+  }
+
+  // The boot rollover runs before sync.js is loaded, so its writes aren't tracked.
+  // Normally the pull brings the past day back and reconcile() carries it again
+  // through sync. But a past day with unpushed offline edits isn't restored by the
+  // pull, so if the cloud's today then replaces ours, those goals would be lost:
+  // remember them and put them back after the pull (see reconcile()).
+  let bootCarry = [];
+  let unsyncedCarry = [];
+  window.goalsBeforeSync = function () {
+    const rs = window.rowSync;
+    if (!rs || typeof rs.isDirty !== 'function') return;
+    unsyncedCarry = bootCarry.filter(c => rs.isDirty('goals', c.from));
+    bootCarry = [];
+  };
+  function restoreUnsyncedCarry() {
+    const rs = window.rowSync;
+    if (!unsyncedCarry.length || !rs || typeof rs.isDirty !== 'function') return;
+    // Only while the source day is still unpushed, and only if our today isn't dirty
+    // (a dirty today wins the pull anyway, and may hold deliberate deletions).
+    unsyncedCarry = unsyncedCarry.filter(c => rs.isDirty('goals', c.from));
+    const k = todayKey();
+    if (!unsyncedCarry.length || rs.isDirty('goals', k)) return;
+    const list = getGoals(k);
+    const texts = new Set(list.map(g => g.text));
+    let added = false;
+    unsyncedCarry.forEach(c => {
+      if (!texts.has(c.text)) { list.push({ text: c.text, done: false }); texts.add(c.text); added = true; }
+    });
+    if (added) setGoals(k, list);
   }
 
   // ---------- streak ----------
@@ -852,27 +1028,49 @@ body::after {
     saveStreak(s);
   }
 
+  // ---------- Icons (inline stroke SVG, inherit currentColor, same style as topbar.js) ----------
+  const ICONS = {
+    more: '<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    chevronDown: '<path d="m6 9 6 6 6-6"/>'
+  };
+  function icon(name, strokeWidth) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (strokeWidth || 1.8) +
+      '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[name] + '</svg>';
+  }
+
+  const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function prefersReducedMotion() { return !!(reduceMotion && reduceMotion.matches); }
+
   // ---------- Goal Ticker ----------
-  const tickerStage = document.getElementById('goalTickerStage');
-  const tickerMeta  = document.getElementById('goalTickerMeta');
+  // Rotates through today's unfinished goals (ones marked Next first) every 5 s.
+  // Not a live region: the list below carries the same information.
+  const tickerEl   = document.getElementById('goalTicker');
+  const tickerLed  = document.getElementById('goalTickerLed');
+  const tickerText = document.getElementById('goalTickerText');
+  const tickerMeta = document.getElementById('goalTickerMeta');
   let cycleIdx = 0;
   let tickerTimer = null;
+  let fadeTimer = null;
 
   function buildTickerItems() {
     const goals = getGoals(todayKey());
     const total = goals.length;
     const done  = goals.filter(g => g.done).length;
-    if (total === 0) return { items: [{ status: 'empty',   text: 'No goals set for today — add one to get rolling.' }], done, total };
-    if (done === total) return { items: [{ status: 'done', text: '✓ All goals done — solid day.' }], done, total };
-    const items = goals.filter(g => !g.done).map(g => ({ status: 'pending', text: g.text }));
+    if (total === 0) return { items: [{ status: 'empty', text: "Add today's first goal" }], done, total };
+    if (done === total) return { items: [{ status: 'done', text: 'All ' + total + ' done' }], done, total };
+    const pending = goals.filter(g => !g.done);
+    const items = pending.filter(g => g.queued).concat(pending.filter(g => !g.queued))
+      .map(g => ({ status: 'pending', text: g.text }));
     return { items, done, total };
   }
 
-  function statusGlyph(status) {
-    if (status === 'done') return '✓';
-    if (status === 'pending') return '○';
-    return '·';
-  }
+  const LED_HTML = {
+    pending: '<span class="goal-ticker-led-dot"></span>',
+    done: icon('check', 2.4),
+    empty: icon('plus', 2.2)
+  };
 
   let firstTick = true;
   function tick() {
@@ -880,38 +1078,57 @@ body::after {
     if (cycleIdx >= items.length) cycleIdx = 0;
     const item = items[cycleIdx];
     cycleIdx = (cycleIdx + 1) % items.length;
-    tickerMeta.textContent = done + '/' + total;
+    tickerMeta.textContent = total ? done + '/' + total : '';
 
-    let row = tickerStage.querySelector('.goal-ticker-row');
-    if (!row) {
-      row = document.createElement('div');
-      row.className = 'goal-ticker-row';
-      row.innerHTML =
-        '<span class="goal-ticker-status"></span>' +
-        '<span class="goal-ticker-text"></span>';
-      tickerStage.appendChild(row);
+    // Name the button after the first item, so it stays stable while the text rotates.
+    const lead = items[0];
+    tickerEl.setAttribute('aria-label',
+      total === 0 ? "No goals yet. Add today's first goal"
+      : done === total ? 'All ' + total + ' goals done. Show list'
+      : done + ' of ' + total + ' goals done. Next: ' + lead.text + '. Show list');
+
+    // Same item as shown: don't blink it (and cancel a crossfade to something stale).
+    if (tickerLed.dataset.status === item.status && tickerText.textContent === item.text) {
+      clearTimeout(fadeTimer);
+      tickerText.classList.remove('is-fading');
+      return;
     }
-
-    const statusEl = row.querySelector('.goal-ticker-status');
-    const textEl   = row.querySelector('.goal-ticker-text');
-
     const apply = () => {
-      statusEl.setAttribute('data-status', item.status);
-      statusEl.textContent = statusGlyph(item.status);
-      textEl.textContent = item.text;
-      row.classList.remove('is-fading');
+      if (tickerLed.dataset.status !== item.status) {
+        tickerLed.dataset.status = item.status;
+        tickerLed.innerHTML = LED_HTML[item.status];
+      }
+      tickerText.textContent = item.text;
+      tickerText.classList.remove('is-fading');
     };
 
-    if (firstTick) { apply(); firstTick = false; return; }
-    row.classList.add('is-fading');
-    setTimeout(apply, 220);
+    clearTimeout(fadeTimer);
+    if (firstTick || prefersReducedMotion()) { apply(); firstTick = false; return; }
+    tickerText.classList.add('is-fading');
+    fadeTimer = setTimeout(apply, 240);
   }
 
   function startTicker() {
-    tick();
     if (tickerTimer) clearInterval(tickerTimer);
-    tickerTimer = setInterval(tick, 5000);
+    tickerTimer = null;
+    cycleIdx = 0;
+    tick();
+    // Under reduced motion the first item (Next first) stays put.
+    if (!prefersReducedMotion()) tickerTimer = setInterval(tick, 5000);
   }
+  if (reduceMotion) {
+    if (reduceMotion.addEventListener) reduceMotion.addEventListener('change', startTicker);
+    else if (reduceMotion.addListener) reduceMotion.addListener(startTicker);
+  }
+
+  // Tap: jump to the list, or straight to the composer when there are no goals yet.
+  tickerEl.addEventListener('click', () => {
+    document.getElementById('todoSection').scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    if (getGoals(todayKey()).length === 0) {
+      try { document.getElementById('goalInput').focus({ preventScroll: true }); }
+      catch (e) { document.getElementById('goalInput').focus(); }
+    }
+  });
 
   window.addEventListener('goals-changed', () => {
     cycleIdx = 0;
@@ -919,33 +1136,6 @@ body::after {
   });
 
   // ---------- Day Ring ----------
-  const PALETTE = [
-    [0,    [255, 216, 158]],
-    [12.5, [255, 205, 121]],
-    [25,   [255, 227, 143]],
-    [37.5, [255, 183, 106]],
-    [50,   [255, 149,  89]],
-    [62.5, [243, 111,  79]],
-    [75,   [226,  93, 122]],
-    [87.5, [123,  91, 176]],
-    [100,  [ 47,  58, 102]]
-  ];
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function paletteAt(p) {
-    if (p <= PALETTE[0][0]) return PALETTE[0][1];
-    if (p >= PALETTE[PALETTE.length - 1][0]) return PALETTE[PALETTE.length - 1][1];
-    for (let i = 0; i < PALETTE.length - 1; i++) {
-      const [p0, c0] = PALETTE[i];
-      const [p1, c1] = PALETTE[i + 1];
-      if (p >= p0 && p <= p1) {
-        const t = (p - p0) / (p1 - p0);
-        return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)];
-      }
-    }
-    return [255,255,255];
-  }
-  function rgb(c) { return 'rgb(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ')'; }
-
   function formatClock(d) {
     let h = d.getHours();
     const m = d.getMinutes();
@@ -954,105 +1144,162 @@ body::after {
     if (h === 0) h = 12;
     return h + ':' + pad2(m) + ' ' + ampm;
   }
-  function formatRemaining(totalMin) {
-    const h = Math.floor(totalMin / 60);
-    const m = Math.floor(totalMin % 60);
-    return h + 'h ' + m + 'm';
+  function clockAt(hours) {
+    return formatClock(new Date(2000, 0, 1, Math.floor(hours), Math.round((hours % 1) * 60)));
+  }
+  // "6h 39m" with small units; "39m" under an hour.
+  function heroHTML(h, m) {
+    if (h === 0) return m + '<span class="unit">m</span>';
+    return h + '<span class="unit">h</span>' + pad2(m) + '<span class="unit">m</span>';
+  }
+  function spokenDuration(h, m) {
+    const parts = [];
+    if (h) parts.push(h + (h === 1 ? ' hour' : ' hours'));
+    if (m || !h) parts.push(m + (m === 1 ? ' minute' : ' minutes'));
+    return parts.join(' ');
   }
 
+  const DAY_HOURS_TEXT = clockAt(WAKE_HOUR) + ' – ' + clockAt(SLEEP_HOUR);
   const C = 2 * Math.PI * 52;
-  const fillEl = document.getElementById('dayRingFill');
+  const dayCard  = document.getElementById('dayCard');
+  const dayRing  = document.getElementById('dayRing');
+  const fillEl   = document.getElementById('dayRingFill');
+  const heroEl   = document.getElementById('dayRingHero');
+  const capEl    = document.getElementById('dayRingCap');
+  const spanEl   = document.getElementById('dayRingSpan');
+  const pageSub  = document.getElementById('pageSub');
   fillEl.setAttribute('stroke-dasharray', C);
-  fillEl.setAttribute('stroke-dashoffset', C);
+  fillEl.setAttribute('stroke-dashoffset', C);   // starts empty, so the first update sweeps in
+
+  function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
 
   function updateDayRing() {
     const now = new Date();
-    const hours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-    const percentEl   = document.getElementById('dayRingPercent');
-    const phaseEl     = document.getElementById('dayRingPhase');
-    const clockEl     = document.getElementById('dayRingClock');
-    const statusEl    = document.getElementById('dayRingStatus');
-    const remainingEl = document.getElementById('dayRingRemaining');
+    // Whole seconds, so the minute maths has no float drift (6.5 - 6.1667 h ≠ 20 min).
+    const sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const wakeSec = Math.round(WAKE_HOUR * 3600), sleepSec = Math.round(SLEEP_HOUR * 3600);
+    let offset, minutes, cap, phase, span = DAY_HOURS_TEXT, pctText = '';
 
-    clockEl.textContent = formatClock(now);
-
-    if (hours < WAKE_HOUR) {
-      fillEl.setAttribute('stroke-dashoffset', C);
-      fillEl.style.stroke = '#4D4B47';
-      percentEl.textContent = '—';
-      phaseEl.textContent   = 'SLEEPING';
-      statusEl.textContent  = '😴 Still sleeping';
-      const minsUntil = (WAKE_HOUR - hours) * 60;
-      remainingEl.textContent = formatRemaining(minsUntil) + ' until wake-up';
-      return;
+    // Time left rounds up and time past bedtime rounds down, so a reading taken
+    // mid-minute matches the one taken on the minute tick.
+    if (sec < wakeSec) {
+      offset = C;
+      minutes = Math.ceil((wakeSec - sec) / 60);
+      cap = 'until wake-up';
+      phase = 'Sleeping';
+    } else if (sec >= sleepSec) {
+      offset = 0;
+      minutes = Math.floor((sec - sleepSec) / 60);
+      cap = 'past bedtime';
+      phase = 'Past bedtime';
+    } else {
+      const percent = (sec - wakeSec) / (sleepSec - wakeSec) * 100;
+      offset = C * (1 - percent / 100);
+      minutes = Math.ceil((sleepSec - sec) / 60);
+      cap = 'left today';
+      if (percent < 25)      phase = 'Morning';
+      else if (percent < 50) phase = 'Midday';
+      else if (percent < 75) phase = 'Afternoon';
+      else if (percent < 90) phase = 'Evening';
+      else                   phase = 'Bedtime soon';
+      pctText = Math.floor(percent) + '% through';
+      span += ' · ' + pctText;
     }
 
-    if (hours >= SLEEP_HOUR) {
-      fillEl.setAttribute('stroke-dashoffset', 0);
-      fillEl.style.stroke = '#E25D7A';
-      percentEl.textContent = '100%';
-      phaseEl.textContent   = 'PAST BEDTIME';
-      statusEl.textContent  = '⚠️ Past bedtime';
-      remainingEl.textContent = 'Sleep!';
-      return;
+    const total = Math.max(0, minutes);
+    const h = Math.floor(total / 60), m = total % 60;
+    fillEl.setAttribute('stroke-dashoffset', offset);
+    dayCard.classList.toggle('is-late', sec >= sleepSec);
+    const html = heroHTML(h, m);
+    if (heroEl.innerHTML !== html) heroEl.innerHTML = html;
+    heroEl.classList.toggle('is-long', h >= 10);
+    setText(capEl, cap);
+    setText(spanEl, span);
+    setText(pageSub, formatDate(getActiveDateString()) + ' · ' + phase);
+    dayRing.setAttribute('aria-label', spokenDuration(h, m) + ' ' + cap + (pctText ? ', ' + pctText : ''));
+  }
+
+  // ---------- Toast (one at a time; Undo is the only action) ----------
+  const toastEl = document.getElementById('toast');
+  let toastTimer = null, toastClearTimer = null;
+  function hideToast() {
+    toastEl.classList.remove('in');
+    clearTimeout(toastClearTimer);
+    // Empty it once faded, so a hidden Undo can't be reached by keyboard or VoiceOver.
+    toastClearTimer = setTimeout(() => { if (!toastEl.classList.contains('in')) toastEl.textContent = ''; }, 300);
+  }
+  function toast(msg, undo) {
+    clearTimeout(toastTimer);
+    clearTimeout(toastClearTimer);
+    toastEl.textContent = '';
+    const span = document.createElement('span');
+    span.textContent = msg;
+    toastEl.appendChild(span);
+    if (undo) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Undo';
+      b.addEventListener('click', () => { clearTimeout(toastTimer); hideToast(); undo(); }, { once: true });
+      toastEl.appendChild(b);
     }
-
-    const span = SLEEP_HOUR - WAKE_HOUR;
-    const percent = (hours - WAKE_HOUR) / span * 100;
-    fillEl.setAttribute('stroke-dashoffset', C * (1 - percent / 100));
-    fillEl.style.stroke = rgb(paletteAt(percent));
-    percentEl.textContent = Math.floor(percent) + '%';
-
-    let phase, status;
-    if (percent < 25)      { phase = 'MORNING';   status = '☀️ Morning — fresh start'; }
-    else if (percent < 50) { phase = 'MIDDAY';    status = '⚡ Midday — keep moving'; }
-    else if (percent < 75) { phase = 'AFTERNOON'; status = '🔥 Afternoon — push it'; }
-    else if (percent < 90) { phase = 'EVENING';   status = '⏳ Evening — wrap up'; }
-    else                   { phase = 'BEDTIME';   status = '🌙 Bedtime soon'; }
-    phaseEl.textContent  = phase;
-    statusEl.textContent = status;
-
-    const minsLeft = (SLEEP_HOUR - hours) * 60;
-    remainingEl.textContent = formatRemaining(minsLeft) + ' awake time left';
+    void toastEl.offsetWidth;   // let the fade-in run when it was display:none (empty)
+    toastEl.classList.add('in');
+    toastTimer = setTimeout(hideToast, undo ? 5000 : 3000);
   }
 
   // ---------- Row building ----------
-  function makeInlineEdit(textEl, goals, idx, key, reload) {
-    textEl.addEventListener('click', () => {
-      if (textEl.getAttribute('contenteditable') === 'true') return;
-      const original = textEl.textContent;
-      textEl.setAttribute('contenteditable', 'true');
-      textEl.focus();
-      const range = document.createRange();
-      range.selectNodeContents(textEl);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(range);
+  function startInlineEdit(textEl, idx, original, key, reload) {
+    if (textEl.getAttribute('contenteditable') === 'true') return;
+    const row = textEl.closest('li');
+    if (row) row.setAttribute('draggable', 'false');
+    textEl.setAttribute('contenteditable', 'true');
+    textEl.setAttribute('role', 'textbox');
+    textEl.setAttribute('aria-label', 'Edit goal');
+    textEl.focus();
+    const range = document.createRange();
+    range.selectNodeContents(textEl);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
 
-      function commit() {
-        const next = textEl.textContent.trim();
-        textEl.removeAttribute('contenteditable');
-        if (next && next !== original) {
-          const list = getGoals(key);
-          if (list[idx]) { list[idx].text = next; setGoals(key, list); }
-          reload();
-        } else {
-          textEl.textContent = original;
-        }
-      }
-      function cancel() {
-        textEl.removeAttribute('contenteditable');
+    let finished = false;
+    function finish() {
+      finished = true;
+      textEl.removeEventListener('keydown', onKey);
+      textEl.removeAttribute('contenteditable');
+      textEl.removeAttribute('role');
+      textEl.removeAttribute('aria-label');
+      if (row) row.setAttribute('draggable', 'true');
+    }
+    function commit() {
+      if (finished) return;
+      const next = textEl.textContent.trim();
+      finish();
+      if (next && next !== original) {
+        const list = getGoals(key);
+        const i = findGoal(list, idx, original);
+        if (i >= 0) { list[i].text = next; setGoals(key, list); }
+        reload();
+      } else {
         textEl.textContent = original;
       }
-      textEl.addEventListener('blur', commit, { once: true });
-      textEl.addEventListener('keydown', function onKey(e) {
-        if (e.key === 'Enter') { e.preventDefault(); textEl.removeEventListener('keydown', onKey); textEl.blur(); }
-        else if (e.key === 'Escape') { e.preventDefault(); textEl.removeEventListener('keydown', onKey); cancel(); }
-      });
-    });
+    }
+    function cancel() {
+      if (finished) return;
+      finish();
+      textEl.textContent = original;
+      textEl.blur();
+    }
+    function onKey(e) {
+      if (e.key === 'Enter') { e.preventDefault(); textEl.blur(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    }
+    textEl.addEventListener('blur', commit, { once: true });
+    textEl.addEventListener('keydown', onKey);
   }
 
-  function wireDragReorder(row, listEl, key, reload) {
+  // Desktop only: HTML5 drag and drop between rows.
+  function wireDragReorder(row, key, reload) {
     row.setAttribute('draggable', 'true');
     row.addEventListener('dragstart', (e) => {
       e.dataTransfer.effectAllowed = 'move';
@@ -1070,6 +1317,7 @@ body::after {
       const to   = parseInt(row.dataset.idx, 10);
       if (isNaN(from) || isNaN(to) || from === to) return;
       const list = getGoals(key);
+      if (!list[from] || to >= list.length) { reload(); return; }
       const [moved] = list.splice(from, 1);
       list.splice(to, 0, moved);
       setGoals(key, list);
@@ -1077,6 +1325,7 @@ body::after {
     });
   }
 
+  let popGoal = '';   // "<key>|<text>" of the goal just checked: only its check pops
   function buildGoalRow(goal, idx, key, readOnly, reload) {
     const li = document.createElement('li');
     li.className = 'gm-row';
@@ -1084,143 +1333,251 @@ body::after {
     if (goal.done) li.classList.add('gm-row-done');
     if (goal.queued) li.classList.add('gm-row-queued');
 
-    const handle = document.createElement('span');
-    handle.className = 'gm-handle';
-    handle.textContent = '⋮⋮';
-    li.appendChild(handle);
-
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.className = 'gm-check';
     cb.checked = !!goal.done;
-    if (readOnly) { cb.disabled = true; cb.title = 'Activates at 6 AM tomorrow'; }
+    cb.setAttribute('aria-label', readOnly ? goal.text + ', locked until 6 AM' : goal.text);
+    if (readOnly) cb.disabled = true;
+    if (goal.done && popGoal === key + '|' + goal.text) { cb.classList.add('is-pop'); popGoal = ''; }
+    const hit = document.createElement('label');   // the 44px tap area around the 24px circle
+    hit.className = 'row-check-hit';
+    hit.appendChild(cb);
     cb.addEventListener('change', () => {
       const list = getGoals(key);
-      if (!list[idx]) return;
-      list[idx].done = cb.checked;
-      if (cb.checked) list[idx].doneAt = Date.now();
-      else delete list[idx].doneAt;
+      const i = findGoal(list, idx, goal.text);
+      if (i < 0) { reload(); return; }
+      list[i].done = cb.checked;
+      if (cb.checked) list[i].doneAt = Date.now();
+      else delete list[i].doneAt;
+      popGoal = cb.checked ? key + '|' + goal.text : '';
       setGoals(key, list);
       reload();
     });
-    li.appendChild(cb);
+    li.appendChild(hit);
 
+    // Tap the text to edit it in place.
+    const body = document.createElement('div');
+    body.className = 'row-goal-body';
     const text = document.createElement('span');
     text.className = 'gm-text';
     text.textContent = goal.text;
-    li.appendChild(text);
-    makeInlineEdit(text, null, idx, key, reload);
+    body.appendChild(text);
+    if (goal.queued && !goal.done) {   // a finished goal isn't "next" any more
+      const tag = document.createElement('span');
+      tag.className = 'row-tag-next';
+      tag.textContent = 'Next';
+      body.appendChild(tag);
+    }
+    body.addEventListener('click', () => startInlineEdit(text, idx, goal.text, key, reload));
+    li.appendChild(body);
 
-    const queueBtn = document.createElement('button');
-    queueBtn.type = 'button';
-    queueBtn.className = 'gm-queue-btn' + (goal.queued ? ' gm-queue-active' : '');
-    queueBtn.textContent = '⚡';
-    queueBtn.title = 'Queue for productivity window';
-    if (readOnly) queueBtn.disabled = true;
-    queueBtn.addEventListener('click', () => {
-      const list = getGoals(key);
-      if (!list[idx]) return;
-      list[idx].queued = !list[idx].queued;
-      setGoals(key, list);
-      li.classList.add('is-queue-flashing');
-      setTimeout(reload, 480);
-    });
-    li.appendChild(queueBtn);
+    // Next / Edit / Delete live in one sheet behind this button.
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'row-more-btn';
+    more.setAttribute('aria-label', 'More actions for ' + goal.text);
+    more.setAttribute('aria-haspopup', 'dialog');
+    more.innerHTML = icon('more');
+    more.addEventListener('click', () => openGoalSheet({
+      key, idx, text: goal.text, queued: !!goal.queued, readOnly, reload, opener: more
+    }));
+    li.appendChild(more);
 
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'goal-delete';
-    del.setAttribute('aria-label', 'Delete goal');
-    del.textContent = '×';
-    del.addEventListener('click', () => {
-      const list = getGoals(key);
-      list.splice(idx, 1);
-      setGoals(key, list);
-      reload();
-    });
-    li.appendChild(del);
-
-    wireDragReorder(li, null, key, reload);
+    wireDragReorder(li, key, reload);
     return li;
   }
+
+  // ---------- Goal actions: Next / Delete (with Undo) ----------
+  function toggleNext(key, idx, text, reload) {
+    const list = getGoals(key);
+    const i = findGoal(list, idx, text);
+    if (i < 0) return;
+    list[i].queued = !list[i].queued;
+    setGoals(key, list);
+    reload();
+  }
+
+  function deleteGoal(key, idx, text, reload) {
+    const list = getGoals(key);
+    const i = findGoal(list, idx, text);
+    if (i < 0) return;
+    const [goal] = list.splice(i, 1);
+    setGoals(key, list);
+    reload();
+    toast('Goal deleted', () => {
+      // Put the original object back where it was, on top of whatever changed since.
+      const cur = getGoals(key);
+      cur.splice(Math.min(i, cur.length), 0, goal);
+      setGoals(key, cur);
+      reload();
+    });
+  }
+
+  // ---------- Goal sheet ----------
+  const sheet = document.getElementById('goalSheet');
+  let sheetCtx = null;
+  let sheetTimer = null;
+
+  function sheetFocusables() {
+    return Array.from(sheet.querySelectorAll('button')).filter(b => !b.hidden && b.offsetParent !== null);
+  }
+  function openGoalSheet(ctx) {
+    sheetCtx = ctx;
+    document.getElementById('goalSheetText').textContent = ctx.text;
+    document.getElementById('goalSheetNextLabel').textContent = ctx.queued ? 'Remove from next' : 'Mark as next';
+    sheet.querySelector('[data-act="next"]').hidden = ctx.readOnly;
+    clearTimeout(sheetTimer);
+    sheet.hidden = false;
+    document.documentElement.classList.add('row-sheet-open');
+    void sheet.offsetWidth;   // start the slide-up from the off-screen position
+    sheet.classList.add('in');
+    const first = sheetFocusables().find(b => b.dataset.act);
+    if (first) { try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); } }
+  }
+  function closeGoalSheet(restoreFocus) {
+    if (sheet.hidden || !sheet.classList.contains('in')) return;
+    const opener = sheetCtx && sheetCtx.opener;
+    sheetCtx = null;
+    sheet.classList.remove('in');
+    document.documentElement.classList.remove('row-sheet-open');
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(() => { if (!sheet.classList.contains('in')) sheet.hidden = true; }, 400);
+    if (restoreFocus !== false && opener && opener.isConnected) {
+      try { opener.focus({ preventScroll: true }); } catch (e) { opener.focus(); }
+    }
+  }
+  // The row title for the sheet's goal (rows may have been rebuilt while it was open).
+  function rowTitleFor(ctx) {
+    if (ctx.opener && ctx.opener.isConnected) return ctx.opener.closest('li').querySelector('.gm-text');
+    const listEl = document.getElementById(ctx.readOnly ? 'tomorrowList' : 'goalList');
+    return Array.from(listEl.querySelectorAll('.gm-text')).find(el => el.textContent === ctx.text) || null;
+  }
+
+  // After an action the rows are rebuilt: put focus on the row's new "more" button (or,
+  // after a delete, the row that took its place) instead of losing it with the sheet.
+  function focusRowMore(ctx, text) {
+    const listEl = document.getElementById(ctx.readOnly ? 'tomorrowList' : 'goalList');
+    const btns = Array.from(listEl.querySelectorAll('.gm-row .row-more-btn'));
+    const b = text != null
+      ? btns.find(x => x.closest('li').querySelector('.gm-text').textContent === text)
+      : btns[Math.min(ctx.idx, btns.length - 1)];
+    if (b) { try { b.focus({ preventScroll: true }); } catch (e) { b.focus(); } }
+  }
+
+  sheet.addEventListener('click', (e) => {
+    if (e.target === sheet || e.target.closest('#goalSheetClose')) { closeGoalSheet(); return; }
+    const b = e.target.closest('[data-act]');
+    if (!b || !sheetCtx) return;
+    const c = sheetCtx;
+    const act = b.dataset.act;
+    if (act === 'next') {
+      closeGoalSheet(false);
+      toggleNext(c.key, c.idx, c.text, c.reload);
+      focusRowMore(c, c.text);
+    } else if (act === 'edit') {
+      const el = rowTitleFor(c);
+      closeGoalSheet(false);
+      if (el) startInlineEdit(el, c.idx, c.text, c.key, c.reload);   // still inside the tap, so iOS shows the keyboard
+    } else if (act === 'delete') {
+      closeGoalSheet(false);
+      deleteGoal(c.key, c.idx, c.text, c.reload);
+      focusRowMore(c, null);
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (sheet.hidden || !sheet.classList.contains('in')) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeGoalSheet(); return; }
+    if (e.key === 'Tab') {   // keep focus inside the dialog
+      const f = sheetFocusables();
+      if (!f.length) return;
+      const i = f.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+    }
+  });
 
   // ---------- Renderers ----------
   function renderTodayHeader() {
     const goals = getGoals(todayKey());
     const total = goals.length;
     const done  = goals.filter(g => g.done).length;
+    const allDone = total > 0 && done === total;
+    // Hide the zero chrome ("0 / 0", the bar) until there is a goal; a running streak
+    // still shows on a fresh morning.
+    document.getElementById('gmHeader').hidden = total === 0 && !(loadStreak().count > 0);
+    document.getElementById('gmProgressRow').hidden = total === 0;
     document.getElementById('gmProgressNum').textContent   = done;
     document.getElementById('gmProgressTotal').textContent = '/ ' + total;
-    const label = document.getElementById('gmProgressLabel');
-    if (total === 0)        label.textContent = 'no goals yet';
-    else if (done === total) label.textContent = 'all done — solid day';
-    else                     label.textContent = 'complete';
+    document.getElementById('gmProgressLabel').textContent = allDone ? 'all done' : 'done';
+    document.getElementById('gmCardToday').classList.toggle('gm-all-done', allDone);
 
-    document.getElementById('todayLabel').textContent =
-      'Today — ' + formatDate(getActiveDateString());
+    document.getElementById('gmBar').innerHTML =
+      goals.map(g => '<i' + (g.done ? ' class="on"' : '') + '></i>').join('');
 
-    const bar = document.getElementById('gmBar');
-    bar.innerHTML = '';
-    goals.forEach(g => {
-      const seg = document.createElement('div');
-      seg.className = 'gm-bar-seg' + (g.done ? ' gm-bar-seg-done' : '');
-      bar.appendChild(seg);
-    });
-
-    const card = document.getElementById('gmCardToday');
-    card.classList.toggle('gm-all-done', total > 0 && done === total);
-
-    const pushBtn = document.getElementById('gmPushBtn');
-    pushBtn.style.display = (total > 0 && done < total) ? 'block' : 'none';
+    const remaining = total - done;
+    document.getElementById('gmPushBtn').hidden = remaining === 0;
+    document.getElementById('gmPushLabel').textContent =
+      'Move ' + remaining + ' unfinished to tomorrow';
   }
 
   function renderStreak() {
     const s = loadStreak();
     document.getElementById('gmStreakNum').textContent = s.count;
-    document.getElementById('gmStreak').classList.toggle('gm-streak-active', s.count > 0);
+    document.getElementById('gmStreak').hidden = !(s.count > 0);
   }
 
   function renderTomorrowCount() {
-    const list = getGoals(tomorrowKey());
-    document.getElementById('gmTomorrowCount').textContent = list.length + ' planned';
-    document.getElementById('tomorrowLabel').textContent =
-      'Plan tomorrow — ' + formatDate(getTomorrowDateString());
+    const n = getGoals(tomorrowKey()).length;
+    const date = formatDate(getTomorrowDateString());
+    document.getElementById('gmTomorrowCount').textContent = n ? date + ' · ' + n + ' planned' : date;
   }
 
+  const SHOW_LIMIT = 5;
+  const expandedLists = {};   // listEl.id -> true while "Show more" is open; survives re-renders
   function renderListInto(goals, listEl, emptyEl, key, readOnly) {
+    // Rebuilding drops focus: remember which control had it (keyboard / VoiceOver users)
+    // and put it back on the same goal's control afterwards.
+    const a = document.activeElement;
+    const toggleHadFocus = a && a.classList.contains('gm-show-toggle') && listEl.contains(a);
+    let refocus = null;
+    if (a && listEl.contains(a) && (a.classList.contains('gm-check') || a.classList.contains('row-more-btn'))) {
+      refocus = { cls: a.classList.contains('gm-check') ? '.gm-check' : '.row-more-btn', text: a.closest('li').querySelector('.gm-text').textContent };
+    }
     listEl.innerHTML = '';
-    emptyEl.style.display = goals.length === 0 ? 'block' : 'none';
-    const reload = () => (key === todayKey() ? loadToday() : loadTomorrow());
+    if (emptyEl) emptyEl.hidden = goals.length > 0;
+    const reload = readOnly ? loadTomorrow : loadToday;
 
-    const visible = goals.length > 5 ? goals.slice(0, 5) : goals;
+    const expanded = goals.length > SHOW_LIMIT && !!expandedLists[listEl.id];
+    const visible = (goals.length > SHOW_LIMIT && !expanded) ? goals.slice(0, SHOW_LIMIT) : goals;
     visible.forEach((g, i) => listEl.appendChild(buildGoalRow(g, i, key, readOnly, reload)));
 
-    if (goals.length > 5) {
-      let expanded = false;
+    if (goals.length > SHOW_LIMIT) {
+      const li = document.createElement('li');
+      li.className = 'gm-more-li';
       const toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'gm-show-toggle';
-      const updateLabel = () => {
-        toggle.textContent = expanded ? 'Show less ▴' : ('Show ' + (goals.length - 5) + ' more ▾');
-      };
-      updateLabel();
+      toggle.setAttribute('aria-expanded', String(expanded));
+      toggle.innerHTML = '<span>' + (expanded ? 'Show less' : 'Show ' + (goals.length - SHOW_LIMIT) + ' more') +
+        '</span>' + icon('chevronDown', 2);
       toggle.addEventListener('click', () => {
-        expanded = !expanded;
-        if (expanded) {
-          goals.slice(5).forEach((g, i) => {
-            const row = buildGoalRow(g, i + 5, key, readOnly, reload);
-            listEl.insertBefore(row, toggle);
-          });
-        } else {
-          Array.from(listEl.querySelectorAll('.gm-row')).slice(5).forEach(r => r.remove());
-        }
-        updateLabel();
+        expandedLists[listEl.id] = !expanded;
+        reload();
       });
-      listEl.appendChild(toggle);
+      li.appendChild(toggle);
+      listEl.appendChild(li);
+      if (toggleHadFocus) toggle.focus({ preventScroll: true });
     }
+    if (refocus) {
+      const row = Array.from(listEl.querySelectorAll('.gm-row')).find(r => r.querySelector('.gm-text').textContent === refocus.text);
+      const el = row && row.querySelector(refocus.cls);
+      if (el) el.focus({ preventScroll: true });
+    }
+    popGoal = '';
 
-    if (key === todayKey()) renderTodayHeader();
-    else                    renderTomorrowCount();
+    if (readOnly) renderTomorrowCount();
+    else          renderTodayHeader();
   }
 
   function loadToday() {
@@ -1229,33 +1586,44 @@ body::after {
   }
   function loadTomorrow() {
     const goals = getGoals(tomorrowKey());
-    renderListInto(goals, document.getElementById('tomorrowList'), document.getElementById('tomorrowEmpty'), tomorrowKey(), true);
+    renderListInto(goals, document.getElementById('tomorrowList'), null, tomorrowKey(), true);
   }
 
-  // ---------- Push remaining ----------
+  // ---------- Push remaining (no confirm: it's undoable) ----------
   document.getElementById('gmPushBtn').addEventListener('click', () => {
-    const today    = getGoals(todayKey());
-    const remaining = today.filter(g => !g.done);
-    if (remaining.length === 0) return;
-    if (!confirm('Move ' + remaining.length + ' unchecked goal' + (remaining.length === 1 ? '' : 's') + ' to tomorrow?')) return;
-    const tomorrow = getGoals(tomorrowKey());
+    const tk = todayKey(), mk = tomorrowKey();
+    const today = getGoals(tk);
+    const moved = [];
+    today.forEach((g, i) => { if (!g.done) moved.push({ i, goal: g }); });
+    if (moved.length === 0) return;
+    const tomorrow = getGoals(mk);
     const seen = new Set(tomorrow.map(g => g.text));
-    remaining.forEach(g => {
-      if (!seen.has(g.text)) { tomorrow.push({ text: g.text, done: false }); seen.add(g.text); }
+    const added = [];
+    moved.forEach(({ goal }) => {
+      if (!seen.has(goal.text)) { tomorrow.push({ text: goal.text, done: false }); seen.add(goal.text); added.push(goal.text); }
     });
-    setGoals(tomorrowKey(), tomorrow);
-    setGoals(todayKey(), today.filter(g => g.done));
+    setGoals(mk, tomorrow);
+    setGoals(tk, today.filter(g => g.done));
     loadToday(); loadTomorrow();
+    toast('Moved ' + moved.length + ' to tomorrow', () => {
+      // Take back what the move added to tomorrow, and put the original goals back in place.
+      const pending = new Set(added);
+      const m = getGoals(mk).filter(g => {
+        if (!g.done && pending.has(g.text)) { pending.delete(g.text); return false; }
+        return true;
+      });
+      const t = getGoals(tk);
+      const have = new Set(t.map(g => g.text));
+      moved.forEach(({ i, goal }) => {
+        if (!have.has(goal.text)) { t.splice(Math.min(i, t.length), 0, goal); have.add(goal.text); }
+      });
+      setGoals(mk, m);
+      setGoals(tk, t);
+      loadToday(); loadTomorrow();
+    });
   });
 
   // ---------- Add + Polish handlers ----------
-  function showStatus(el, message, isError) {
-    el.textContent = message;
-    el.classList.toggle('gm-status-error', !!isError);
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.textContent = ''; el.classList.remove('gm-status-error'); }, 3500);
-  }
-
   async function polishOne(text) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -1283,37 +1651,51 @@ body::after {
     return arr[0].trim();
   }
 
-  function makeAddHandlers(input, addBtn, polishBtn, key, statusEl, reload) {
+  // getKey is a function, not a key: the page can stay open across the 6 AM boundary.
+  function makeAddHandlers(input, addBtn, polishBtn, getKey, reload) {
+    function syncAddState() { addBtn.disabled = !input.value.trim(); }
     function plainAdd(text) {
+      const key = getKey();
       const list = getGoals(key);
       list.push({ text, done: false });
       setGoals(key, list);
       input.value = '';
+      syncAddState();
       reload();
     }
+    polishBtn.hidden = !ANTHROPIC_API_KEY;
+    syncAddState();
+    input.addEventListener('input', syncAddState);
+
+    // Keep the keyboard up after tapping +, so several goals can go in one after another.
+    let inputWasFocused = false;
+    const noteFocus = () => { inputWasFocused = document.activeElement === input; };
+    addBtn.addEventListener('touchstart', noteFocus, { passive: true });
+    addBtn.addEventListener('mousedown', (e) => { noteFocus(); if (inputWasFocused) e.preventDefault(); });
     addBtn.addEventListener('click', () => {
       const text = input.value.trim();
       if (!text) return;
       plainAdd(text);
+      if (inputWasFocused && document.activeElement !== input) input.focus();
+      inputWasFocused = false;
     });
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); }
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      const text = input.value.trim();
+      if (text) plainAdd(text);
     });
     polishBtn.addEventListener('click', async () => {
       const text = input.value.trim();
       if (!text) return;
-      if (!ANTHROPIC_API_KEY) {
-        plainAdd(text);
-        showStatus(statusEl, 'Polish needs an Anthropic API key — added as-typed.', false);
-        return;
-      }
+      if (!ANTHROPIC_API_KEY) { plainAdd(text); return; }
       polishBtn.disabled = true;
       try {
         const polished = await polishOne(text);
         plainAdd(polished);
       } catch (e) {
         plainAdd(text);
-        showStatus(statusEl, 'Polish failed — added as-typed.', true);
+        toast('Polish failed — added as typed');
       } finally {
         polishBtn.disabled = false;
       }
@@ -1324,32 +1706,78 @@ body::after {
     document.getElementById('goalInput'),
     document.getElementById('goalAddBtn'),
     document.getElementById('goalPolishBtn'),
-    todayKey(),
-    document.getElementById('polishStatus'),
+    todayKey,
     loadToday
   );
   makeAddHandlers(
     document.getElementById('tomorrowInput'),
     document.getElementById('tomorrowAddBtn'),
     document.getElementById('tomorrowPolishBtn'),
-    tomorrowKey(),
-    document.getElementById('tomorrowStatus'),
+    tomorrowKey,
     loadTomorrow
   );
 
+  // ---------- Reconcile: re-read storage and re-render ----------
+  // Runs when cloud values land, on cross-tab storage events and when the 6 AM day
+  // changes. Past days (e.g. restored by a cloud pull) are counted and carried over
+  // again; those writes now go through sync, so the cloud gets the rollover too.
+  function reconcile() {
+    if (hasPastGoalKeys()) { processStreak(); rollover(); }
+    restoreUnsyncedCarry();
+    loadToday();
+    loadTomorrow();
+    renderStreak();
+    updateDayRing();
+    cycleIdx = 0;
+    tick();
+  }
+  // Never rebuild the lists under an inline edit or a half-typed goal: wait for blur.
+  function isEditing() {
+    const a = document.activeElement;
+    // Text entry only: a focused checkbox (desktop click, keyboard) mustn't hold off cloud updates.
+    return !!a && (a.isContentEditable || (a.tagName === 'INPUT' && a.type === 'text') || a.tagName === 'TEXTAREA');
+  }
+  let reconcileQueued = false;
+  function reconcileWhenIdle() {
+    if (isEditing()) { reconcileQueued = true; return; }
+    reconcileQueued = false;
+    reconcile();
+  }
+  document.addEventListener('focusout', () => {
+    if (!reconcileQueued) return;
+    setTimeout(() => { if (reconcileQueued && !isEditing()) { reconcileQueued = false; reconcile(); } }, 0);
+  });
+  window.goalsAfterSync = reconcileWhenIdle;
+
+  // ---------- Day change (the app stays open across 6 AM; WKWebView never reloads) ----------
+  let activeDay = getActiveDateString();
+  function checkDay() {
+    updateDayRing();
+    const d = getActiveDateString();
+    if (d === activeDay) return;
+    activeDay = d;
+    reconcileWhenIdle();
+  }
+  function scheduleMinuteTick() {   // on the minute, so the hero's minutes stay current
+    setTimeout(() => { checkDay(); scheduleMinuteTick(); }, 60000 - (Date.now() % 60000) + 50);
+  }
+
   // ---------- Boot ----------
-  rollover();
-  processStreak();
+  processStreak();   // before rollover, which deletes the past days the streak is counted from
+  bootCarry = rollover();
   loadToday();
   loadTomorrow();
   renderStreak();
   updateDayRing();
-  setInterval(updateDayRing, 60 * 1000);
   startTicker();
+  scheduleMinuteTick();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDay(); });
+  window.addEventListener('pageshow', checkDay);
+  window.addEventListener('focus', checkDay);
 
-  // Re-render when storage changes from another tab (or our bridged parent).
-  window.addEventListener('storage', () => {
-    loadToday(); loadTomorrow(); renderStreak();
+  // Re-render when storage changes from another tab.
+  window.addEventListener('storage', (e) => {
+    if (!e.key || e.key.indexOf('goals:') === 0 || e.key === 'goal_streak_v1') reconcileWhenIdle();
   });
 })();
 </script>
@@ -1357,34 +1785,51 @@ body::after {
 // Calories card: reads today's totals from the food tracker's localStorage (food_v1).
 (function () {
   function todayKey() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  // Same parsing as food.html's num(): "1,5" → 1.5; junk → null.
+  function num(s) {
+    if (s == null) return null;
+    const t = String(s).trim().replace(',', '.');
+    if (!t) return null;
+    const x = Number(t);
+    return isFinite(x) ? x : null;
+  }
+  const DEFAULT_TARGETS = { kcal: 2116, p: 128, c: 241, f: 70 };
   function render() {
     let S = null;
     try { S = JSON.parse(localStorage.getItem('food_v1')); } catch (e) {}
-    const tg = (S && S.targets) || { kcal: 2116, p: 128, c: 241, f: 70 };
+    const tg = (S && S.targets && typeof S.targets === 'object') ? S.targets : DEFAULT_TARGETS;
+    const tgt = { kcal: Number(tg.kcal) || 0, p: Number(tg.p) || 0, c: Number(tg.c) || 0, f: Number(tg.f) || 0 };
     const day = todayKey(), sum = { kcal: 0, p: 0, c: 0, f: 0 };
-    ((S && S.entries) || []).forEach(function (e) {
-      if (e.date !== day || !e.base || !e.baseAmt) return;
-      const k = (parseFloat(String(e.amount).replace(',', '.')) || 0) / e.baseAmt;
-      sum.kcal += e.base.kcal * k; sum.p += e.base.p * k; sum.c += e.base.c * k; sum.f += e.base.f * k;
+    ((S && Array.isArray(S.entries)) ? S.entries : []).forEach(function (e) {
+      if (!e || e.date !== day || !e.base || !e.baseAmt) return;
+      const k = (num(e.amount) || 0) / e.baseAmt;
+      sum.kcal += (Number(e.base.kcal) || 0) * k; sum.p += (Number(e.base.p) || 0) * k;
+      sum.c += (Number(e.base.c) || 0) * k;       sum.f += (Number(e.base.f) || 0) * k;
     });
-    const left = tg.kcal - sum.kcal, over = left < 0;
+    const left = tgt.kcal - sum.kcal, over = left < 0;
     const $ = function (id) { return document.getElementById(id); };
-    $('calBig').textContent = Math.round(Math.abs(left)).toLocaleString('en-GB');
+    const n0 = function (v) { return Math.round(v).toLocaleString('en-GB'); };
+    $('calBig').textContent = n0(Math.abs(left));
     $('calUnit').textContent = over ? 'kcal over' : 'kcal left';
-    $('calMeta').textContent = sum.kcal > 0 ? Math.round(sum.kcal).toLocaleString('en-GB') + ' / ' + tg.kcal.toLocaleString('en-GB') : 'Tap to log food';
+    $('calMeta').textContent = sum.kcal > 0 ? n0(sum.kcal) + ' / ' + n0(tgt.kcal) : 'Nothing logged';
+    $('calMeta').parentElement.classList.toggle('is-empty', !(sum.kcal > 0));
+    $('calCard').classList.toggle('is-over', over);
     $('calBar').classList.toggle('over', over);
-    $('calBar').firstElementChild.style.width = Math.min(100, sum.kcal / Math.max(1, tg.kcal) * 100) + '%';
+    $('calBar').firstElementChild.style.width = Math.min(100, sum.kcal / Math.max(1, tgt.kcal) * 100) + '%';
     [['P', 'p'], ['C', 'c'], ['F', 'f']].forEach(function (m) {
-      $('cal' + m[0]).innerHTML = Math.round(sum[m[1]]) + ' <small>/ ' + tg[m[1]] + ' g</small>';
-      $('cal' + m[0] + 'b').style.width = Math.min(100, tg[m[1]] > 0 ? sum[m[1]] / tg[m[1]] * 100 : 0) + '%';
+      $('cal' + m[0]).innerHTML = Math.round(sum[m[1]]) + ' <small>/ ' + n0(tgt[m[1]]) + ' g</small>';
+      $('cal' + m[0] + 'b').style.width = Math.min(100, tgt[m[1]] > 0 ? sum[m[1]] / tgt[m[1]] * 100 : 0) + '%';
     });
   }
   render();
   window.addEventListener('storage', render);
   window.addEventListener('pageshow', render);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) render(); });
   setInterval(render, 60 * 1000);
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof initCloudSync !== 'function') return;
+    // Main only reads food_v1 and never writes it. sync.js pushes it from here only when
+    // the food row has no food_v1 yet, or food.html changed it in another tab.
     initCloudSync({ appKey: 'food', syncedKeys: ['food_v1'], onApplied: render });
   });
 })();
@@ -1392,13 +1837,13 @@ body::after {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   if (typeof initCloudSync !== 'function') return;
+  if (window.goalsBeforeSync) window.goalsBeforeSync();
   initCloudSync({
     appKey: 'goals',
     syncedPrefixes: ['goals:'],
-    onApplied: function () {
-      window.dispatchEvent(new CustomEvent('goals-changed'));
-      window.dispatchEvent(new Event('storage'));
-    }
+    // Cloud values landed: re-read storage, re-run rollover/streak and re-render
+    // (deferred while a goal is being typed or edited).
+    onApplied: function () { if (window.goalsAfterSync) window.goalsAfterSync(); }
   });
 });
 </script>
