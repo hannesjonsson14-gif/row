@@ -3,3 +3,9 @@
 .vscode/
 .idea/
 *.swp
+
+# iOS build output / Xcode user data / local deps
+ios/build/
+**/xcuserdata/
+node_modules/
+package-lock.json

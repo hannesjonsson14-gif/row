@@ -27,3 +27,13 @@ Each app stores its own state in browser `localStorage`. No accounts, no server.
 ## Building from scratch
 
 [BUILD_DASHBOARD.md](BUILD_DASHBOARD.md) is the prompt I gave Claude to generate `index.html` — paste it into Claude if you want to rebuild that page yourself.
+
+## iPhone app
+
+[ios/](ios) wraps these pages in a small native app (a web view with the pages bundled in). The build copies `../*.html`, `topbar.js` and `sync.js` into the app, so the repo stays the single source of truth.
+
+1. `open ios/Row.xcodeproj`
+2. Pick your iPhone as the run destination and press Run (signing: team `JRH46HXFZR`, edit `ios/project.yml` for a different one).
+3. After editing `ios/project.yml`: `cd ios && xcodegen generate`.
+
+The app has its own storage, separate from Safari; data moves between them only through cloud sync.
