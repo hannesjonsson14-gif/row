@@ -238,6 +238,32 @@ body::after {
   .day-ring-status { font-size: 13px; }
 }
 
+
+/* ===== Calories card (links to food.html) ===== */
+.cal-card {
+  display: block; position: relative; overflow: hidden; text-decoration: none; color: inherit;
+  background: rgba(255,255,255,0.04); border-radius: 16px; padding: 16px 18px;
+  backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45); margin-bottom: 18px;
+  -webkit-tap-highlight-color: transparent; transition: transform 0.12s;
+}
+.cal-card:active { transform: scale(0.99); }
+.cal-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 90% at 0% 0%, rgba(224,118,88,0.12), transparent 70%); pointer-events: none; }
+.cal-card > * { position: relative; }
+.cal-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cal-big { font-size: 34px; font-weight: 800; letter-spacing: -0.04em; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
+.cal-big small { font-size: 12px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0; margin-left: 5px; }
+.cal-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.cal-bar { height: 7px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; margin: 12px 0 12px; }
+.cal-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #C7C4BC, #FFFFFF); box-shadow: 0 0 10px rgba(255,255,255,0.22); transition: width 0.6s cubic-bezier(0.22,1,0.36,1); }
+.cal-bar.over > i { background: linear-gradient(90deg, #FF9A9A, var(--danger)); }
+.cal-macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.cal-mac-lab { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
+.cal-mac-val { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); margin-top: 3px; white-space: nowrap; }
+.cal-mac-val small { font-size: 10.5px; font-weight: 500; color: var(--text-tertiary); }
+.cal-mac-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.07); margin-top: 6px; overflow: hidden; }
+.cal-mac-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; transition: width 0.6s cubic-bezier(0.22,1,0.36,1); }
+
 /* ===== Component 4: section + To Do List ===== */
 .section { margin-top: 8px; }
 .section-title {
@@ -637,6 +663,22 @@ body::after {
       <div class="day-ring-remaining" id="dayRingRemaining">—</div>
       <div class="day-ring-hours">8:00 AM – 12:00 AM</div>
     </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Calories</div>
+    <a class="cal-card" href="food.html" id="calCard" aria-label="Open the food tracker">
+      <div class="cal-top">
+        <div class="cal-big"><span id="calBig">—</span><small id="calUnit">kcal left</small></div>
+        <div class="cal-meta" id="calMeta">Tap to log food</div>
+      </div>
+      <div class="cal-bar" id="calBar"><i></i></div>
+      <div class="cal-macros">
+        <div><div class="cal-mac-lab">Protein</div><div class="cal-mac-val" id="calP">—</div><div class="cal-mac-bar"><i id="calPb" style="background:#5CC8FF"></i></div></div>
+        <div><div class="cal-mac-lab">Carbs</div><div class="cal-mac-val" id="calC">—</div><div class="cal-mac-bar"><i id="calCb" style="background:#F2B04A"></i></div></div>
+        <div><div class="cal-mac-lab">Fat</div><div class="cal-mac-val" id="calF">—</div><div class="cal-mac-bar"><i id="calFb" style="background:#B58CFF"></i></div></div>
+      </div>
+    </a>
   </div>
 
   <div class="section">
@@ -1304,6 +1346,42 @@ body::after {
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
     loadToday(); loadTomorrow(); renderStreak();
+  });
+})();
+</script>
+<script>
+// Calories card: reads today's totals from the food tracker's localStorage (food_v1).
+(function () {
+  function todayKey() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function render() {
+    let S = null;
+    try { S = JSON.parse(localStorage.getItem('food_v1')); } catch (e) {}
+    const tg = (S && S.targets) || { kcal: 2116, p: 128, c: 241, f: 70 };
+    const day = todayKey(), sum = { kcal: 0, p: 0, c: 0, f: 0 };
+    ((S && S.entries) || []).forEach(function (e) {
+      if (e.date !== day || !e.base || !e.baseAmt) return;
+      const k = (parseFloat(String(e.amount).replace(',', '.')) || 0) / e.baseAmt;
+      sum.kcal += e.base.kcal * k; sum.p += e.base.p * k; sum.c += e.base.c * k; sum.f += e.base.f * k;
+    });
+    const left = tg.kcal - sum.kcal, over = left < 0;
+    const $ = function (id) { return document.getElementById(id); };
+    $('calBig').textContent = Math.round(Math.abs(left)).toLocaleString('en-GB');
+    $('calUnit').textContent = over ? 'kcal over' : 'kcal left';
+    $('calMeta').textContent = sum.kcal > 0 ? Math.round(sum.kcal).toLocaleString('en-GB') + ' / ' + tg.kcal.toLocaleString('en-GB') : 'Tap to log food';
+    $('calBar').classList.toggle('over', over);
+    $('calBar').firstElementChild.style.width = Math.min(100, sum.kcal / Math.max(1, tg.kcal) * 100) + '%';
+    [['P', 'p'], ['C', 'c'], ['F', 'f']].forEach(function (m) {
+      $('cal' + m[0]).innerHTML = Math.round(sum[m[1]]) + ' <small>/ ' + tg[m[1]] + ' g</small>';
+      $('cal' + m[0] + 'b').style.width = Math.min(100, tg[m[1]] > 0 ? sum[m[1]] / tg[m[1]] * 100 : 0) + '%';
+    });
+  }
+  render();
+  window.addEventListener('storage', render);
+  window.addEventListener('pageshow', render);
+  setInterval(render, 60 * 1000);
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof initCloudSync !== 'function') return;
+    initCloudSync({ appKey: 'food', syncedKeys: ['food_v1'], onApplied: render });
   });
 })();
 </script>

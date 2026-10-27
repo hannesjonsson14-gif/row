@@ -19,7 +19,7 @@ const CONFIG = {
   appTitle: "V-Taper Recomp",
 
   // Bump this whenever you change days/exercises/gyms so localStorage is reset.
-  configVersion: 2,
+  configVersion: 3,
 
   units: "kg",
 
@@ -27,21 +27,24 @@ const CONFIG = {
     { id: "comm", name: "Commercial Gym" }
   ],
 
-  // Upper A (lats + side delts) / Lower A / Upper B (press + rear delts) / Lower B
+  // Anterior / Posterior is the active program (ported from the Hannes Fitness app).
+  // The older Upper/Lower days stay available in the day picker but aren't in the rotation.
   days: [
+    { id: "anterior",  name: "Anterior" },
+    { id: "posterior", name: "Posterior" },
     { id: "upper-a", name: "Upper A" },
     { id: "lower-a", name: "Lower A" },
     { id: "upper-b", name: "Upper B" },
     { id: "lower-b", name: "Lower B" }
   ],
 
-  // Mon Upper A · Tue Lower A · Wed rest · Thu Upper B · Fri Lower B · Sat/Sun rest
-  splitRotation: ["upper-a", "lower-a", "rest", "upper-b", "lower-b", "rest", "rest"],
+  // Anterior → Posterior → Rest, repeating (a 3-day cycle, not tied to weekdays).
+  splitRotation: ["anterior", "posterior", "rest"],
 
-  // Anchor to Monday 9 Jun 2026 = Upper A. Adjust splitId if your week drifts.
+  // Anchor: Tue 27 Oct 2026 = Anterior. Adjust splitId if your cycle drifts.
   splitAnchor: {
-    date: "2026-06-09",
-    splitId: "upper-a"
+    date: "2026-10-27",
+    splitId: "anterior"
   },
 
   // Double-progression: upgrade triggers at each exercise's own repMax
@@ -55,6 +58,26 @@ const CONFIG = {
   },
 
   defaultExercises: [
+    // ── ANTERIOR — chest · shoulders · triceps · abs · quads (Hannes Fitness program) ──
+    { name: "Machine Fly (Pec Deck)", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 40, rir: "1–2", sets: 2, tips: "Set the seat so handles sit at mid-chest. Lead with the elbows, squeeze the chest at the middle, and control the stretch back. Swap: Cable Fly, Dumbbell Fly." },
+    { name: "Machine Incline Bench Press", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 50, rir: "1–2", sets: 2, tips: "Handles at upper-chest height, elbows tucked 45–60°. Don't let the stack touch between reps. Swap: Dumbbell Incline Press, Machine Chest Press." },
+    { name: "Machine Lateral Raise", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 20, rir: "1–2", sets: 2, tips: "Lead with the elbows, raise to shoulder height, slow 2–3s lower. If traps take over, go lighter. Swap: Dumbbell Lateral Raise, Cable Lateral Raise." },
+    { name: "Machine Shoulder Press", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 30, rir: "1–2", sets: 2, tips: "Brace the abs, press without overarching the back, full lockout, controlled lower. Swap: Seated Dumbbell Shoulder Press." },
+    { name: "Cable V-Bar Triceps Pushdown", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 20, rir: "1–2", sets: 2, tips: "Elbows fixed at the sides. Full lockout at the bottom, control the stretch up. Swap: Cable Overhead Triceps Extension, Dips." },
+    { name: "Dips", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 0, startWeight: 0, rir: "1–2", sets: 1, tips: "One hard set. Lean slightly forward for chest, upright for triceps. Add weight once you hit 12 clean reps. Swap: Cable V-Bar Pushdown, Machine Chest Press.", bw: true },
+    { name: "Machine Ab Crunch", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 30, rir: "1–2", sets: 2, tips: "Curl the ribs toward the hips and exhale hard; don't pull with the arms. Swap: Cable Crunch." },
+    { name: "Machine Leg Extension", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 35, rir: "1–2", sets: 2, tips: "Full lockout at the top, slow 2–3s lower, hips back in the seat. Swap: Hack Squat." },
+    { name: "Machine Leg Press", gym: "comm", day: "anterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 100, rir: "1–2", sets: 2, tips: "Full depth your hips tolerate, knees track over toes, lower back stays on the pad. Swap: Hack Squat." },
+
+    // ── POSTERIOR — back · biceps · hamstrings · glutes · calves ──
+    { name: "Machine Row", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 40, rir: "1–2", sets: 2, tips: "Pull to the lower ribs, pause and squeeze, control the stretch. Don't shrug. Swap: Chest-Supported Dumbbell Row, Seated Cable Row." },
+    { name: "Lat Pulldown, Wide Grip", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 50, rir: "1–2", sets: 2, tips: "Drive the elbows down and in toward the hips. Let the shoulder blades rise fully at the top. Swap: Machine Front Pulldown, Pull-Up." },
+    { name: "Machine Front Pulldown", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 50, rir: "1–2", sets: 2, tips: "Lean back slightly and pull to the upper chest; full stretch at the top. Swap: Lat Pulldown, Pull-Up." },
+    { name: "Machine Preacher Curl", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 20, rir: "1–2", sets: 2, tips: "Armpits on the pad, full stretch at the bottom, squeeze at the top, no swinging. Swap: Dumbbell Incline Curl." },
+    { name: "Seated Hamstring Curl", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 35, rir: "1–2", sets: 2, tips: "Control the negative, don't let the hips pop up. Full stretch at the top. Swap: Lying Leg Curl, Romanian Deadlift." },
+    { name: "Machine Leg Press", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 100, rir: "1–2", sets: 2, tips: "Feet a little higher and wider than on Anterior day to bias glutes and hamstrings; full depth, controlled." },
+    { name: "Leg Press Calf Raise", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 50, rir: "1–2", sets: 2, tips: "Full stretch at the bottom (pause 1s), full squeeze at the top (pause 1s). No bouncing. Swap: Standing Calf Raise." },
+
     // ── UPPER A — Width (lats + side delts) ─────────────────────
     { name: "Lat Pulldown (wide)",    gym: "comm", day: "upper-a", repMin: 6,  repMax: 10, step: 2.5, startWeight: 50,  rir: "1–2", sets: 4, tips: "Drive elbows DOWN and IN toward your hips — not the bar to your chin. Let shoulder blades fully rise at the top for a complete lat stretch. Lean back ~15°. This stretch-loaded position is where lat width is built." },
     { name: "Chest-Supported Row",    gym: "comm", day: "upper-a", repMin: 8,  repMax: 12, step: 2.5, startWeight: 40,  rir: "1–2", sets: 3, tips: "Pull to lower ribs, elbows at ~45°, pause and squeeze at the top, then control the stretch on the way down. Don't shrug — keep traps out of it." },
@@ -269,6 +292,10 @@ img, video, canvas, svg { max-width: 100%; }
   cursor: pointer; transition: background 0.15s, color 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
+/* Day picker holds more days than fit on a phone: scroll sideways instead of truncating names. */
+#daySeg { overflow-x: auto; scrollbar-width: none; }
+#daySeg::-webkit-scrollbar { display: none; }
+#daySeg .po-seg-btn { flex: 1 0 auto; overflow: visible; text-overflow: clip; white-space: nowrap; padding-left: 12px; padding-right: 12px; }
 .po-seg-btn:hover { color: var(--text-2); background: rgba(255,255,255,0.04); }
 .po-seg-btn.active {
   background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
