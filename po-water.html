@@ -16,9 +16,13 @@ Contact: rowan.wisere@gmail.com
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0b">
-<title>Water Coach</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Embedded in Health (iframe): mark it before first paint so the page drops its own heading and background -->
+<script>(function(){var e;try{e=window.self!==window.top}catch(_){e=true}if(e)document.documentElement.classList.add('is-embedded')})();</script>
+<meta name="theme-color" content="#050506">
+<title>Water</title>
+<!-- defer: parsing and first paint never wait on the CDN (offline, or inside Health where sync is skipped).
+     Deferred scripts still run in order before DOMContentLoaded, so sync.js and initCloudSync see window.supabase. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
 <script src="sync.js" defer></script>
 <script src="topbar.js" defer></script>
 
@@ -28,7 +32,7 @@ Contact: rowan.wisere@gmail.com
      ============================================================= -->
 <script>
 const CONFIG = {
-  appTitle: "Water Coach",
+  appTitle: "Water",
 
   // Default unit. Options: "bottle" | "glass" | "oz" | "ml"
   unit: "bottle",
@@ -59,570 +63,841 @@ const CONFIG = {
 </script>
 
 <style>
+/* ===================== row-tokens v1 =====================
+   Paste as the FIRST rule of each page's first <style>, identical on every page.
+   Then the page overrides only the 4 --accent* lines (see per-page accents).
+   Contrast numbers are measured on --surface-1 over --bg (≈ #101011). */
 :root {
-  --bg: #0a0a0b;
-  --bg-card: #111113;
-  --text-1: #ffffff;
-  --text-2: rgba(255,255,255,0.6);
-  --text-3: rgba(255,255,255,0.5);
-  --text-4: rgba(255,255,255,0.25);
-  --border: rgba(255,255,255,0.06);
-  --border-strong: rgba(255,255,255,0.14);
-  --good: #6ee7b7;
-  --warn: #fbbf24;
-  --bad: #ff8a8a;
-  --info: #7DD3FC;
-  --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+  color-scheme: dark;
+
+  /* ---- Base canvas (flat: no radial washes, no grain, no drift) ---- */
+  --bg: #050506;                         /* page; also <meta name="theme-color"> on every page */
+  --bg-elevated: #141416;                /* OPAQUE: sheets, modals, menus, workout session, overlays */
+  --bg-chrome: rgba(8, 8, 9, 0.78);      /* top bar / tab bar / finance nav, always with --blur-material */
+
+  /* ---- Surfaces: translucent white so they stack on any base (incl. inside the water iframe) ---- */
+  --surface-1: rgba(255, 255, 255, 0.045);   /* card                       ≈ #101011 */
+  --surface-2: rgba(255, 255, 255, 0.065);   /* row / field / tile in card ≈ #202020 */
+  --surface-3: rgba(255, 255, 255, 0.10);    /* tonal button, pressed row  ≈ #282829 */
+  --surface-active: rgba(255, 255, 255, 0.14); /* selected segment */
+  --surface-sunken: rgba(0, 0, 0, 0.28);     /* legacy recessed well (being phased out for --surface-2) */
+  --track: rgba(255, 255, 255, 0.08);        /* progress bar / ring track */
+
+  /* ---- Lines ---- */
+  --hairline: rgba(255, 255, 255, 0.06);       /* list separators, chrome edges */
+  --border: rgba(255, 255, 255, 0.08);         /* card/control edge where one is needed */
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --control-border: rgba(255, 255, 255, 0.36); /* unchecked checkbox ring: 3.3:1 (WCAG 1.4.11) */
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05); /* the "glass lip" on cards */
+
+  /* ---- Text (warm neutrals) ---- */
+  --text-1: #FAFAFA;   /* primary          16.9:1 */
+  --text-2: #B8B6B0;   /* secondary         9.4:1 */
+  --text-3: #94918A;   /* tertiary, placeholders: ≥5.0:1 on surface-2, 4.7:1 on surface-3. Lowest level for anything that carries information */
+  --text-4: #5E5C57;   /* 2.9:1 — disabled + purely decorative glyphs ONLY, never information */
+  --text-on-light: #0A0A0B; /* ink on porcelain / accent fills (16:1 on porcelain, ≥6.5:1 on every accent) */
+
+  /* ---- Porcelain: the one primary-button material, shared by every page ---- */
+  --porcelain: #F4F1EA;
+  --porcelain-fill: linear-gradient(180deg, #FFFFFF 0%, #ECE9E2 100%); /* subtle material sheen, buttons only */
+
+  /* ---- Semantic status (used only for status, never as decoration) ---- */
+  --positive: #6BE3A4;  --positive-tint: rgba(107, 227, 164, 0.14);  /* 11.9:1 */
+  --warning:  #F2C063;  --warning-tint:  rgba(242, 192, 99, 0.14);   /* 11.3:1 */
+  --negative: #FF6B6B;  --negative-tint: rgba(255, 107, 107, 0.14);  /* 6.9:1, 5.7:1 on its tint */
+
+  /* ---- Feature hues: each domain owns one; reused wherever that domain appears ---- */
+  --hue-day:     #E07658;  /* Main: Day Ring, goals: ember   6.3:1 (5.3:1 on its tint) */
+  --hue-health:  #7DD3FC;  /* Health stack + Water + top-bar water pill: sky  11.4:1 */
+  --hue-food:    #F4F1EA;  /* Food: kcal: porcelain  16.9:1 */
+  --hue-fitness: #6BE3A4;  /* Fitness: mint  11.9:1 */
+  --hue-finance: #B58CFF;  /* Finance: violet  7.4:1 (6.1:1 on its tint) */
+  --protein: #5CC8FF;  --carbs: #F2B04A;  --fat: #B58CFF;  /* macro DATA colours: bars/dots only */
+  --data-1: #7DD3FC; --data-2: #6BE3A4; --data-3: #F2C063; --data-4: #B58CFF; --data-5: #E07658; /* finance categories / donut */
+
+  /* ---- Page accent (each page overrides these four lines) ---- */
+  --accent: var(--hue-day);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(224, 118, 88, 0.14);
+  --accent-ring: rgba(224, 118, 88, 0.60);   /* focus outline + focused field border */
+
+  /* ---- Type ---- */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-micro: 11px;     /* eyebrows, tab labels, tags, axis labels (floor: nothing smaller) */
+  --fs-caption: 12px;   /* row meta, helper text, mono sub-lines */
+  --fs-footnote: 13px;  /* secondary text, segment/chip labels, field labels */
+  --fs-body: 15px;      /* body, list-row titles, buttons */
+  --fs-headline: 17px;  /* sheet titles, emphasized row values, large buttons */
+  --fs-title-3: 20px;   /* "/ 7" denominators next to a hero, card titles */
+  --fs-title-2: 22px;   /* secondary stat, food item name in sheet */
+  --fs-title-1: 28px;   /* page title (26px at ≤360px) */
+  --fs-display: 34px;   /* secondary hero (e.g. kcal on Main's food card, wishlist total) */
+  --fs-hero: 48px;      /* the ONE number per screen */
+  --fs-input: 16px;     /* every input/select/textarea: iOS will not zoom */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; /* 800 retired */
+  --lh-tight: 1.05; --lh-snug: 1.25; --lh-body: 1.45;
+  --tracking-hero: -0.035em; --tracking-title: -0.022em; --tracking-body: -0.005em;
+  --tracking-eyebrow: 0.08em;  /* was 0.14–0.22em in 9 variants */
+
+  /* ---- Space (4pt grid) ---- */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-7: 28px; --space-8: 32px; --space-10: 40px;
+  --gutter: 16px;        /* page side gutter (20px ≥481px) */
+  --card-pad: 16px;      /* (20px ≥481px) */
+  --card-gap: 12px;      /* between stacked cards */
+  --section-gap: 28px;   /* above a section label */
+  --page-max: 640px;
+  --tap: 44px;           /* minimum hit target */
+
+  /* ---- Radii (5 values; replaces 13 in gym alone) ---- */
+  --radius-xs: 6px;      /* tiny inner marks only */
+  --radius-sm: 8px;      /* tiles, tags-in-rows, chart corners */
+  --radius-md: 12px;     /* fields, segmented control, inset groups, toast, large checkbox */
+  --radius-lg: 18px;     /* cards, grouped lists */
+  --radius-xl: 26px;     /* bottom-sheet top corners */
+  --radius-pill: 999px;  /* buttons, chips, tags, bars */
+
+  /* ---- Elevation (no glows anywhere) ---- */
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 24px 64px rgba(0, 0, 0, 0.60);
+  --shadow-porcelain: inset 0 1px 0 rgba(255, 255, 255, 0.70), 0 1px 2px rgba(0, 0, 0, 0.40), 0 6px 16px rgba(0, 0, 0, 0.30);
+  --blur-material: saturate(1.6) blur(20px);  /* chrome, sheets' scrim-free bars, toasts only */
+
+  /* ---- Motion ---- */
+  --dur-instant: 100ms;   /* press scale */
+  --dur-fast: 160ms;      /* colour/background changes */
+  --dur-base: 240ms;      /* toggles, fades, check pop, ticker crossfade */
+  --dur-slow: 360ms;      /* sheets, overlays */
+  --dur-progress: 600ms;  /* bar/ring fills */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* checkmark pop only */
+
+  /* ---- Layout & layers ---- */
+  --topbar-h: 52px;  --tabbar-h: 56px;
+  --z-chrome: 40; --z-session: 80; --z-sheet: 100; --z-viewer: 200; --z-toast: 250; --z-camera: 300;
+
+  /* ================= Legacy aliases =================
+     So existing rules adopt the system without renaming. */
+  --text-primary: var(--text-1);  --text-secondary: var(--text-2);
+  --text-tertiary: var(--text-3); --text-quaternary: var(--text-4);
+  --success: var(--positive); --danger: var(--negative);
+  --good: var(--positive); --warn: var(--warning); --bad: var(--negative); --info: var(--hue-health);
+  --bg-deep: var(--bg);
+  --bg-card: #111113;  /* opaque on purpose: gym/po-water also paint MODALS with --bg-card; visually = surface-1 on --bg */
+  --bg-secondary: var(--surface-2); --bg-input: var(--surface-2); --bg-input-focus: var(--surface-2);
+  --bg-dropdown: var(--bg-elevated);
+  --card: var(--surface-1); --field: var(--surface-2); --hair: var(--border); --border-soft: var(--hairline);
+  --glass-bg: var(--surface-1); --glass-border: transparent; --glass-border-strong: transparent;
+  --glass-shadow: var(--shadow-card);
+  --kcal: var(--hue-food);
+  --warning-bg: var(--warning-tint); --tag-stack: var(--warning); --tag-stack-bg: var(--warning-tint);
+  --accent-glow: transparent;
+  /* finance --radius-sm (8) / --radius-md (12) map 1:1; finance --radius-lg 16 → 18 */
 }
+@media (min-width: 481px) { :root { --gutter: 20px; --card-pad: 20px; } }
+@media (max-width: 360px) { :root { --fs-title-1: 26px; --fs-hero: 44px; } }
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-instant: 0ms; --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; --dur-progress: 0ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+  }
+}
+/* ===================== /row-tokens v1 ===================== */
+
+/* Water accent: sky, shared with Health and the top-bar water pill */
+:root {
+  --accent: var(--hue-health);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(125, 211, 252, 0.14);
+  --accent-ring: rgba(125, 211, 252, 0.60);
+}
+
+/* ----- Base ----- */
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, #14141a 0%, #0a0a0b 60%);
-  color: var(--text-1);
-  font-family: var(--font);
-  -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
-}
-.shell { max-width: 720px; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 16px 80px; }
-
-/* ----- Top day pill + header ----- */
-.day-pill {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 12px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  background: var(--bg);
   color: var(--text-2);
-  font-family: var(--font-mono);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.10em;
-  text-transform: uppercase; margin-bottom: 10px;
-  -webkit-tap-highlight-color: transparent;
+  font: var(--fw-regular) var(--fs-body)/var(--lh-body) var(--font);
+  letter-spacing: var(--tracking-body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
-.day-pill .day-sep { color: var(--text-4); }
+body { min-height: 100vh; min-height: 100dvh; }
+[hidden] { display: none !important; }
+input, select, textarea { font-size: var(--fs-input); } /* 16px: iOS does not zoom on focus */
+:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+::selection { background: var(--accent-tint); color: var(--text-1); }
+a, button, input, select, textarea, label, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+button { cursor: pointer; }
+.row-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
+/* Page container: topbar.js owns safe-area-top and the tab-bar reserve (body.has-bottombar) */
+.shell {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--space-3) calc(var(--gutter) + env(safe-area-inset-right)) var(--space-8) calc(var(--gutter) + env(safe-area-inset-left));
+}
+
+/* ----- Embedded in Health (iframe): Health's section label is the only heading ----- */
+html.is-embedded, html.is-embedded body { background: transparent; min-height: 0; }
+html.is-embedded .shell { max-width: none; padding: 0 0 var(--space-6); }
+html.is-embedded .header { display: none; }
+html.is-embedded .water-num { font-size: var(--fs-display); } /* Health's stack count stays the one 48px hero */
+/* While the settings sheet is open the iframe covers the screen; the page itself hides behind the scrim */
+html.sheet-host, html.sheet-host body { overflow: hidden; }
+html.sheet-host .shell { visibility: hidden; }
+
+/* ----- Page header (standalone) ----- */
 .header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 18px;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-5);
 }
-.title { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; margin: 0; }
-.icon-btn {
-  width: 38px; height: 38px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  border-radius: 10px; color: var(--text-2); cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.18s, color 0.18s;
+.title {
+  margin: 0;
+  font: var(--fw-bold) var(--fs-title-1)/1.1 var(--font-display);
+  letter-spacing: var(--tracking-title);
+  color: var(--text-1);
 }
-.icon-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-1); }
-
-/* ----- Eyebrow divider ----- */
-.divider {
-  display: flex; align-items: center; gap: 16px; margin-bottom: 14px;
-}
-.divider::before, .divider::after {
-  content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.10);
-}
-.divider span {
-  font-size: 11px; letter-spacing: 0.22em; font-weight: 600;
-  color: rgba(255,255,255,0.85);
+.day-pill {
+  margin: var(--space-1) 0 0;
+  font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  color: var(--text-3);
 }
 
 /* ----- Card ----- */
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 22px 20px 18px;
-  margin-bottom: 14px;
+  position: relative;
+  margin: 0 0 var(--card-gap);
+  padding: var(--card-pad);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card);
 }
+.icon-btn {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: var(--tap); height: var(--tap); padding: 0;
+  border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--text-3);
+  transition: background-color var(--dur-fast), transform var(--dur-instant) var(--ease-out);
+}
+.icon-btn:active { transform: scale(0.94); background: var(--surface-3); }
+.icon-btn svg { width: 20px; height: 20px; }
 
-/* ----- Water hero ----- */
+/* ----- Water hero: the screen's one number ----- */
+.water-hero { padding: var(--space-5); }
+.water-hero-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) var(--space-1) 0;
+}
 .water-label {
-  font-size: 10px; letter-spacing: 0.20em; font-weight: 700;
-  color: var(--text-3); margin-bottom: 8px; text-transform: uppercase;
+  margin: 0;
+  font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font);
+  letter-spacing: var(--tracking-eyebrow); text-transform: uppercase;
+  color: var(--text-3);
 }
-.water-row {
-  display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px;
-}
+.water-row { display: flex; flex-wrap: wrap; align-items: baseline; white-space: nowrap; } /* wraps only for 5-digit ml on a narrow phone */
 .water-num {
-  font-size: 56px; font-weight: 700; letter-spacing: -0.03em;
-  line-height: 1; font-variant-numeric: tabular-nums;
+  display: inline-block;
+  font: var(--fw-bold) var(--fs-hero)/var(--lh-tight) var(--font-display);
+  letter-spacing: var(--tracking-hero);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
 }
 .water-target {
-  font-size: 18px; color: var(--text-3); font-weight: 500;
+  margin-left: 4px;
+  font: var(--fw-medium) var(--fs-title-3)/1 var(--font-mono);
+  letter-spacing: 0; color: var(--text-3);
 }
-
-/* Progress bar */
-.water-bar-wrap { position: relative; margin: 14px 0 22px; }
-.water-bar-track {
-  position: relative; height: 28px; border-radius: 14px;
-  background: rgba(255,255,255,0.04);
-  overflow: hidden;
+.water-unit {
+  margin-left: 6px;
+  font: var(--fw-medium) var(--fs-body)/1 var(--font);
+  letter-spacing: 0; color: var(--text-3);
 }
-.water-bar-fill {
-  position: absolute; top: 0; bottom: 0; left: 0;
-  border-radius: 14px;
-  background: linear-gradient(90deg, var(--info), var(--good));
-  transition: width 0.4s ease;
-  box-shadow: 0 0 18px rgba(110,231,183,0.18);
-}
-.water-bar-fill.over {
-  background: linear-gradient(90deg, var(--good), var(--warn));
-}
-.water-bar-zone {
-  position: absolute; top: 0; bottom: 0;
-  width: 1px; background: rgba(255,255,255,0.18);
-}
-.water-bar-labels {
-  display: flex; justify-content: space-between;
+.water-sub {
+  display: flex; justify-content: space-between; gap: var(--space-3);
   margin-top: 6px;
-  font-size: 10px; color: var(--text-3);
-  font-family: var(--font-mono);
+  font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  color: var(--text-3);
 }
-.water-bar-labels .water-zone-name {
-  color: var(--good); font-weight: 700; letter-spacing: 0.10em;
-  text-transform: lowercase;
-}
+#waterRemain { color: var(--text-2); text-align: right; }
 
-/* Action row */
+/* Progress: one segment per bottle/glass; a continuous bar for oz/ml. Full = target met */
+.water-bar { position: relative; margin-top: var(--space-4); }
+.water-bar.is-seg { display: flex; gap: 3px; height: 10px; }
+.water-bar.is-seg > i {
+  flex: 1; min-width: 0;
+  border-radius: 3px; background: var(--track);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.water-bar.is-seg > i.on { background: var(--accent); }
+.water-bar.is-seg > i.due { background: rgba(125, 211, 252, 0.30); } /* should be drunk by now */
+.water-bar.is-cont { height: 10px; border-radius: var(--radius-pill); background: var(--track); overflow: hidden; }
+.water-bar.is-cont > i {
+  display: block; height: 100%; width: 0;
+  border-radius: inherit; background: var(--accent);
+  transition: width var(--dur-progress) var(--ease-out);
+}
+.water-bar-marker { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text-3); }
+
+/* Coach line: dot = status, sentence = what to do */
+.water-helper {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  font: var(--fw-regular) var(--fs-footnote)/1.4 var(--font);
+  color: var(--text-2);
+}
+.water-helper-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--text-3); }
+.water-helper[data-state="behind"] .water-helper-dot { background: var(--warning); }
+.water-helper[data-state="done"] .water-helper-dot { background: var(--accent); }
+
+/* Log actions */
 .water-actions {
-  display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: stretch;
+  display: grid; grid-template-columns: 52px 1fr; gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 .water-minus-btn {
-  background: rgba(255,255,255,0.06);
-  border: none; border-radius: 16px;
-  color: var(--text-1);
-  font-size: 22px; font-weight: 700;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  display: grid; place-items: center;
+  width: 52px; height: 52px; padding: 0;
+  border: 0; border-radius: var(--radius-pill);
+  background: var(--surface-3); color: var(--text-1);
+  transition: transform var(--dur-instant) var(--ease-out), opacity var(--dur-fast);
 }
-.water-minus-btn:hover { background: rgba(255,255,255,0.10); }
-.water-minus-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.water-minus-btn svg { width: 20px; height: 20px; }
+.water-minus-btn:active { transform: scale(0.94); }
+.water-minus-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
 .water-plus-btn {
-  background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
-  color: #0a0a0b; border: none; border-radius: 16px;
-  font-family: inherit; font-size: 16px; font-weight: 700;
-  cursor: pointer; padding: 16px;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  -webkit-tap-highlight-color: transparent;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 4px 14px rgba(0,0,0,0.40);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 0; min-height: 52px; padding: 0 var(--space-6);
+  border: 0; border-radius: var(--radius-pill);
+  background: var(--porcelain-fill); color: var(--text-on-light);
+  font: var(--fw-bold) var(--fs-headline)/1 var(--font);
+  letter-spacing: 0; white-space: nowrap;
+  box-shadow: var(--shadow-porcelain);
+  transition: transform var(--dur-instant) var(--ease-out);
 }
-.water-plus-btn:hover { transform: translateY(-1px); }
-.water-plus-btn:active { transform: scale(0.98); }
+.water-plus-btn:active { transform: scale(0.97); }
 
-.water-helper {
-  text-align: center; font-size: 12px;
-  color: var(--text-3); margin-top: 12px;
-  font-style: italic;
-}
-.water-helper.good { color: var(--good); font-style: normal; }
+/* Feedback on a tap only (not on first render); the token block neutralises it under reduced motion */
+.water-num.tick { animation: num-tick var(--dur-base) var(--ease-out); }
+@keyframes num-tick { from { transform: translateY(6px); opacity: 0.35; } to { transform: none; opacity: 1; } }
+.water-bar.is-seg > i.pop { transform-origin: left center; animation: seg-pop var(--dur-base) var(--ease-out); }
+@keyframes seg-pop { from { transform: scaleX(0.2); opacity: 0.4; } to { transform: none; opacity: 1; } }
 
-/* ----- Why this target? collapsible ----- */
+/* ----- "Why N bottles?": full-bleed footer row of the hero card ----- */
 .why-toggle {
-  width: 100%; display: flex; align-items: center; justify-content: space-between;
-  background: transparent; border: 1px solid var(--border);
-  color: var(--text-2); border-radius: 10px;
-  padding: 11px 14px; cursor: pointer; margin-top: 14px;
-  font-family: inherit; font-size: 12px; font-weight: 600;
-  letter-spacing: 0.04em;
-  -webkit-tap-highlight-color: transparent;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  width: calc(100% + 2 * var(--space-5)); min-height: 48px;
+  margin: var(--space-5) calc(-1 * var(--space-5)) calc(-1 * var(--space-5));
+  padding: 0 var(--space-5);
+  border: 0; border-top: 1px solid var(--hairline);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: none; color: var(--text-2);
+  font: var(--fw-medium) var(--fs-footnote)/1 var(--font);
+  text-align: left;
+  transition: background-color var(--dur-fast);
 }
-.why-toggle:hover { background: rgba(255,255,255,0.04); color: var(--text-1); }
-.why-arrow { transition: transform 0.2s; font-size: 14px; }
-.why-toggle[aria-expanded="true"] .why-arrow { transform: rotate(180deg); }
+.why-toggle:active { background: var(--surface-2); }
+.why-toggle:focus-visible { outline-offset: -2px; }
+.why-toggle[aria-expanded="true"] { margin-bottom: 0; border-radius: 0; }
+.why-chevron {
+  width: 16px; height: 16px; flex-shrink: 0; color: var(--text-3);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.why-toggle[aria-expanded="true"] .why-chevron { transform: rotate(180deg); }
 .why-body {
-  margin-top: 8px;
-  padding: 14px 16px;
-  background: rgba(255,255,255,0.025);
-  border: 1px solid var(--border);
-  border-radius: 10px;
   display: none;
+  margin-top: var(--space-1);
+  padding: var(--space-3) 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
 }
 .why-body.show { display: block; }
 .why-row {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 13px; padding: 4px 0;
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3);
+  padding: 5px 0;
+  font: var(--fw-regular) var(--fs-footnote)/1.35 var(--font);
+  color: var(--text-2);
+}
+.why-val {
+  font: var(--fw-medium) var(--fs-footnote)/1.35 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  color: var(--text-1); white-space: nowrap;
+}
+.why-row.total { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.why-row.total .why-label, .why-row.total .why-val { color: var(--text-1); font-weight: var(--fw-semibold); }
+
+/* ----- History: last 14 days ----- */
+.row-section-label {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3);
+  margin: var(--section-gap) var(--space-1) var(--space-2);
+  font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font);
+  letter-spacing: var(--tracking-eyebrow); text-transform: uppercase;
+  color: var(--text-3);
+}
+.row-section-label .meta {
+  font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0; text-transform: none;
+  color: var(--text-3); text-align: right;
 }
-.why-row .why-label { color: var(--text-2); }
-.why-row .why-val   { color: var(--text-1); font-weight: 600; font-family: var(--font-mono); }
-.why-row.total {
-  border-top: 1px solid var(--border);
-  margin-top: 8px; padding-top: 10px;
+.row-section-label .meta.is-sel { color: var(--text-1); }
+.spark-svg { display: block; width: 100%; height: 88px; }
+.spark-bar { fill: var(--accent); transition: opacity var(--dur-fast); }
+.spark-bar.miss { fill: rgba(255, 255, 255, 0.16); }        /* under target: neutral, not red */
+.spark-bar.today { fill: var(--accent); fill-opacity: 0.35; } /* today, still in progress */
+.spark-bar.zero { fill: var(--track); }
+.spark-target { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1; stroke-dasharray: 2 4; }
+.spark-hit { fill: transparent; cursor: pointer; }
+.spark-svg.has-sel .spark-bar { opacity: 0.45; }
+.spark-svg.has-sel .spark-bar.sel { opacity: 1; }
+.spark-axis {
+  display: grid; grid-template-columns: repeat(14, minmax(0, 1fr));
+  margin-top: var(--space-2);
+  font: var(--fw-medium) var(--fs-micro)/1 var(--font-mono);
+  color: var(--text-3); text-align: center;
 }
-.why-row.total .why-label { color: var(--good); font-weight: 700; }
-.why-row.total .why-val   { color: var(--good); }
+.spark-axis .is-today { color: var(--text-1); font-weight: var(--fw-bold); }
+.spark-axis .is-sel { color: var(--accent); font-weight: var(--fw-bold); }
 
-/* ----- History ----- */
-.hist-row {
-  display: grid; grid-template-columns: 70px 1fr auto; gap: 10px;
-  padding: 10px 0; align-items: center;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.hist-row:last-child { border-bottom: none; }
-.hist-date { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); }
-.hist-bar-wrap {
-  height: 8px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden;
-}
-.hist-bar-fill {
-  height: 100%; background: linear-gradient(90deg, var(--info), var(--good));
-  border-radius: 4px;
-}
-.hist-bar-fill.miss { background: rgba(255,138,138,0.4); }
-.hist-count {
-  font-family: var(--font-mono); font-size: 12px;
-  color: var(--text-2); font-variant-numeric: tabular-nums;
-}
-
-/* ----- Mini chart for last 14 days ----- */
-.spark-wrap { padding: 6px 0; }
-.spark-svg { width: 100%; height: 70px; display: block; }
-.spark-bar { fill: var(--good); }
-.spark-bar.miss { fill: rgba(255,138,138,0.5); }
-.spark-target {
-  stroke: rgba(255,255,255,0.20);
-  stroke-width: 1; stroke-dasharray: 3 3;
-  vector-effect: non-scaling-stroke;
+/* ----- Empty state ----- */
+.row-empty { padding: var(--space-7) var(--space-5); text-align: center; }
+.row-empty-title { font: var(--fw-semibold) var(--fs-body)/1.3 var(--font); color: var(--text-1); }
+.row-empty-body {
+  max-width: 32ch; margin: var(--space-1) auto 0;
+  font: var(--fw-regular) var(--fs-footnote)/var(--lh-body) var(--font);
+  color: var(--text-3);
 }
 
-/* ----- Modal ----- */
-.modal-bg {
-  display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.65); backdrop-filter: blur(6px);
-  z-index: 100; align-items: center; justify-content: center; padding: 20px;
+/* ----- Settings: bottom sheet ----- */
+/* .modal-bg keeps topbar.js's body scroll lock; the panel is .row-sheet (not .modal), and the
+   overlay is display:block, so topbar.js's old ≤480px full-screen .modal override can't reach it. */
+.modal-bg.row-sheet-bg {
+  position: fixed; inset: 0; z-index: var(--z-sheet);
+  display: block; padding: 0;
+  background: rgba(0, 0, 0, 0);
+  visibility: hidden; pointer-events: none;
+  overscroll-behavior: contain;
+  transition: background-color var(--dur-base) var(--ease-out), visibility 0s linear var(--dur-slow);
 }
-.modal-bg.show { display: flex; }
-.modal {
-  width: 100%; max-width: 480px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
-  border-radius: 16px;
-  padding: 22px; max-height: 88vh; overflow-y: auto;
+.modal-bg.row-sheet-bg.show {
+  background: rgba(0, 0, 0, 0.55);
+  visibility: visible; pointer-events: auto;
+  transition: background-color var(--dur-base) var(--ease-out), visibility 0s;
 }
-.modal h3 {
-  margin: 0 0 14px; font-size: 17px; font-weight: 700;
+.row-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 560px; margin: 0 auto;
+  max-height: calc(100vh - 52px);
+  max-height: calc(100dvh - max(44px, env(safe-area-inset-top)) - 8px);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-raised);
+  transform: translateY(100%);
+  transition: transform var(--dur-slow) var(--ease-sheet);
 }
-.set-section { margin-bottom: 22px; }
-.set-section h4 {
-  margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--text-3);
+.row-sheet-bg.show .row-sheet { transform: none; }
+.row-sheet-grab { width: 36px; height: 5px; margin: 6px auto 0; border-radius: 3px; background: rgba(255, 255, 255, 0.22); }
+.row-sheet-head {
+  display: grid; grid-template-columns: 64px 1fr 64px; align-items: center;
+  min-height: 52px; padding: 0 var(--space-2);
+}
+.row-sheet-head h2 {
+  margin: 0; text-align: center;
+  font: var(--fw-semibold) var(--fs-headline)/1.2 var(--font);
+  letter-spacing: 0; color: var(--text-1);
+}
+.row-sheet-head h2:focus { outline: none; }
+.row-sheet-done {
+  justify-self: end;
+  min-height: var(--tap); padding: 0 var(--space-3);
+  border: 0; background: none;
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-headline)/1 var(--font);
+}
+.row-sheet-done:active { opacity: 0.6; }
+.row-sheet-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-5);
+  padding: var(--space-1) var(--gutter) calc(var(--space-5) + env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* Inside Health's iframe env() insets read 0: keep clear of the status bar and home indicator */
+html.is-embedded .row-sheet { max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
+html.is-embedded .row-sheet-body { padding-bottom: calc(var(--space-5) + max(34px, env(safe-area-inset-bottom))); }
+
+.set-section { display: flex; flex-direction: column; }
+.set-label {
+  margin: 0 var(--space-1) var(--space-2);
+  font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font);
+  letter-spacing: var(--tracking-eyebrow); text-transform: uppercase;
+  color: var(--text-3);
 }
 
-/* ----- Form fields ----- */
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.field label {
-  font-size: 11px; color: var(--text-3); font-weight: 700;
-  letter-spacing: 0.06em; text-transform: uppercase;
+/* iOS-settings grouped rows */
+.row-form-rows { border-radius: var(--radius-lg); background: var(--surface-1); overflow: hidden; }
+.row-form-row {
+  display: flex; align-items: center; gap: var(--space-3);
+  min-height: 50px; padding: 0 var(--space-4);
+  transition: background-color var(--dur-fast);
 }
-.field input[type="number"], .field input[type="text"], .field select {
-  background: rgba(0,0,0,0.28);
-  border: 1px solid var(--border);
+.row-form-row + .row-form-row { box-shadow: inset 0 1px 0 var(--hairline); }
+.row-form-row:focus-within { background: var(--surface-2); }
+.row-form-row > label, .row-form-label {
+  flex: 1; min-width: 0;
+  font: var(--fw-regular) var(--fs-body)/1.3 var(--font);
   color: var(--text-1);
-  font-family: inherit; font-size: 14px;
-  padding: 10px 12px; border-radius: 10px; outline: none;
-  -moz-appearance: textfield;
 }
-.field input[type="number"]::-webkit-outer-spin-button,
-.field input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.field input:focus, .field select:focus {
-  border-color: rgba(110,231,183,0.40);
-  box-shadow: 0 0 0 2px rgba(110,231,183,0.10);
+.row-form-row input {
+  width: 72px; min-height: 44px; padding: 0;
+  border: 0; background: none; outline: none;
+  color: var(--text-1); caret-color: var(--accent);
+  font: var(--fw-regular) var(--fs-input)/1.2 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  text-align: right;
+  -webkit-appearance: none; appearance: textfield; -moz-appearance: textfield;
 }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.seg {
-  display: flex; gap: 4px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  border-radius: 10px; padding: 3px;
+.row-form-row input::-webkit-outer-spin-button,
+.row-form-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.row-form-unit {
+  min-width: 44px;
+  font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono);
+  letter-spacing: 0; color: var(--text-3);
 }
-.seg button {
-  flex: 1; padding: 9px; border: none; background: transparent;
-  color: var(--text-3); border-radius: 7px;
-  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.seg button.active {
-  background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
-  color: #0a0a0b;
+.row-form-row--stack { flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
+.row-field-help {
+  margin: 6px var(--space-1) 0;
+  font: var(--fw-regular) var(--fs-caption)/1.4 var(--font);
+  color: var(--text-3);
 }
 
-/* ----- Stimulant search ----- */
+/* Segmented control: tonal selection, 44px tall */
+.seg { display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-md); background: var(--surface-2); }
+.seg > button {
+  position: relative;
+  flex: 1; min-height: 38px; padding: 0 var(--space-3);
+  border: 0; border-radius: 9px;
+  background: transparent; color: var(--text-2);
+  font: var(--fw-semibold) var(--fs-footnote)/1 var(--font);
+  letter-spacing: 0; white-space: nowrap;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+/* The hit area covers the control's 3px padding and the 2px gaps, so each segment is a 44px target */
+.seg > button::after { content: ''; position: absolute; inset: -3px -1px; }
+.seg > button.active {
+  background: var(--surface-active); color: var(--text-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.row-form-row .seg { flex: 0 0 auto; }
+.seg--compact > button { flex: 0 0 auto; min-width: 44px; }
+
+/* Stimulants & meds: search, in-flow results, added list */
 .search-wrap { position: relative; }
 .search-input {
-  width: 100%; background: rgba(0,0,0,0.28);
-  border: 1px solid var(--border);
-  color: var(--text-1); font-family: inherit; font-size: 14px;
-  padding: 11px 14px; border-radius: 10px; outline: none;
+  width: 100%; min-height: 48px; padding: 12px 14px;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  background: var(--surface-2); color: var(--text-1);
+  font: var(--fw-regular) var(--fs-input)/1.25 var(--font);
+  caret-color: var(--accent); outline: none;
+  -webkit-appearance: none; appearance: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
-.search-input:focus { border-color: rgba(110,231,183,0.40); }
+.search-input::placeholder { color: var(--text-3); }
+.search-input:focus { border-color: var(--accent-ring); }
+.search-input::-webkit-search-decoration { -webkit-appearance: none; }
 .search-results {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px; padding: 4px;
-  max-height: 240px; overflow-y: auto;
-  z-index: 5;
   display: none;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  overflow: hidden;
 }
 .search-results.show { display: block; }
 .search-result {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 9px 12px; border-radius: 7px;
-  cursor: pointer; font-size: 13px;
-  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: 56px;
+  padding: 10px var(--space-2) 10px var(--space-4);
+  border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left;
+  transition: background-color var(--dur-fast);
 }
-.search-result:hover { background: rgba(255,255,255,0.05); }
-.search-result-name { color: var(--text-1); font-weight: 600; }
+.search-result + .search-result::before,
+.sub-row + .sub-row::before,
+.row-list-row + .row-list-row::before {
+  content: ''; position: absolute; top: 0; right: 0; left: var(--space-4);
+  height: 1px; background: var(--hairline);
+}
+button.search-result:active:not(:disabled) { background: var(--surface-2); }
+button.search-result:disabled { cursor: default; }
+.search-result:focus-visible { outline-offset: -2px; }
+.search-result-body { flex: 1; min-width: 0; }
+.search-result-name {
+  font: var(--fw-semibold) var(--fs-body)/1.3 var(--font);
+  color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .search-result-meta {
-  font-size: 10.5px; color: var(--text-3);
-  font-family: var(--font-mono);
-}
-.search-result-add { color: var(--good); }
-
-.subs-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.sub-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
-  background: rgba(255,255,255,0.025);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  flex-wrap: wrap;
-}
-.sub-row-info { flex: 1; min-width: 140px; }
-.sub-row-name { font-size: 13px; font-weight: 600; color: var(--text-1); }
-.sub-row-meta {
-  font-size: 11px; color: var(--text-3);
-  font-variant-numeric: tabular-nums; font-family: var(--font-mono);
   margin-top: 2px;
+  font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  color: var(--text-3);
 }
-.sub-row-dose {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(0,0,0,0.30);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px 8px;
+.search-result-note { margin-top: 2px; font: var(--fw-regular) var(--fs-caption)/1.3 var(--font); color: var(--text-3); }
+.search-result-add { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; color: var(--accent); }
+.search-result-add svg { width: 20px; height: 20px; }
+.row-tag {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  height: 22px; padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2); color: var(--text-2);
+  font: var(--fw-semibold) var(--fs-micro)/1 var(--font);
+  letter-spacing: 0.01em; white-space: nowrap;
 }
-.sub-row-dose .sub-dose-input {
-  width: 56px; background: transparent; border: none; outline: none;
-  color: var(--text-1); font-family: inherit; font-size: 13px;
-  font-weight: 600; text-align: center;
-  font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-}
-.sub-row-dose .sub-dose-input::-webkit-outer-spin-button,
-.sub-row-dose .sub-dose-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.sub-row-dose .sub-dose-unit {
-  font-size: 11px; color: var(--text-3);
-  font-family: var(--font-mono);
-  white-space: nowrap;
-}
-.sub-row-del {
-  background: transparent; border: none; color: var(--text-4);
-  font-size: 16px; cursor: pointer; padding: 4px 8px;
-  -webkit-tap-highlight-color: transparent;
-}
-.sub-row-del:hover { color: var(--bad); }
+.row-tag--accent { background: var(--accent-tint); color: var(--accent); }
 
-/* ----- Buttons ----- */
-.btn-primary {
-  width: 100%; padding: 13px;
-  border: none;
-  background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
-  color: #0a0a0b; border-radius: 12px;
-  font-family: inherit; font-size: 14px; font-weight: 700;
-  cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 4px 14px rgba(0,0,0,0.40);
-  -webkit-tap-highlight-color: transparent;
+.subs-list {
+  margin-top: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  overflow: hidden;
 }
-.btn-secondary {
-  padding: 11px 16px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.04);
-  color: var(--text-1); border-radius: 10px;
-  font-family: inherit; font-size: 13px; font-weight: 600;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+.sub-row {
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-2);
+  min-height: 60px; padding: 8px 0 8px var(--space-4);
 }
-.btn-secondary:hover { background: rgba(255,255,255,0.10); }
-.modal-actions {
-  display: flex; gap: 8px; margin-top: 16px;
+.sub-row-info { flex: 1; min-width: 0; }
+.sub-row-name {
+  font: var(--fw-semibold) var(--fs-body)/1.3 var(--font);
+  color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.modal-actions .btn-primary { flex: 1; }
+.sub-row-meta {
+  margin-top: 2px;
+  font: var(--fw-regular) var(--fs-caption)/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  color: var(--text-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sub-dose-input {
+  width: 64px; min-height: var(--tap); padding: 8px 10px; flex-shrink: 0;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  background: var(--surface-2); color: var(--text-1);
+  font: var(--fw-regular) var(--fs-input)/1.2 var(--font-mono);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  text-align: right; caret-color: var(--accent); outline: none;
+  -webkit-appearance: none; appearance: textfield; -moz-appearance: textfield;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.sub-dose-input:focus { border-color: var(--accent-ring); }
+.sub-dose-input::-webkit-outer-spin-button,
+.sub-dose-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sub-row-del { color: var(--text-3); }
+.subs-empty {
+  margin: 0; padding: var(--space-5) var(--space-4);
+  text-align: center;
+  font: var(--fw-regular) var(--fs-footnote)/var(--lh-body) var(--font);
+  color: var(--text-3);
+}
 
-@media (max-width: 480px) {
-  .shell { padding: 16px 12px 60px; }
-  .water-num { font-size: 48px; }
+/* Data: export/import rows, then the destructive action on its own */
+.set-data { display: flex; flex-direction: column; gap: var(--space-3); }
+.row-list { border-radius: var(--radius-lg); background: var(--surface-1); overflow: hidden; }
+.row-list-row {
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: 50px; padding: 0 var(--space-4);
+  border: 0; background: transparent;
+  color: var(--text-1);
+  font: var(--fw-regular) var(--fs-body)/1.3 var(--font);
+  text-align: left;
+  transition: background-color var(--dur-fast);
 }
+.row-list-row:active { background: var(--surface-2); }
+.row-list-row:focus-visible { outline-offset: -2px; }
+.row-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--tap); padding: 0 var(--space-5);
+  border: 0; border-radius: var(--radius-pill);
+  font: var(--fw-semibold) var(--fs-body)/1 var(--font);
+  letter-spacing: 0; white-space: nowrap;
+  transition: transform var(--dur-instant) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.row-btn:active { transform: scale(0.97); }
+.row-btn--danger { background: var(--negative-tint); color: var(--negative); }
+.row-btn--block { width: 100%; }
 </style>
 </head>
 <body>
 
 <div class="shell">
 
-  <button class="day-pill" id="dayPill" type="button">
-    <span id="dayPillLabel">—</span>
-  </button>
-
-  <div class="header">
-    <h1 class="title" id="appTitle">Water Coach</h1>
-    <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
-  </div>
-
-  <div class="divider"><span>WATER</span></div>
-
-  <div class="card">
-    <div class="water-label" id="waterUnitLabel">BOTTLES DRANK TODAY</div>
-    <div class="water-row">
-      <span class="water-num" id="waterNum">0</span>
-      <span class="water-target" id="waterTarget">/ 9</span>
+  <header class="header">
+    <div>
+      <h1 class="title" id="appTitle">Water</h1>
+      <p class="day-pill" id="dayPill"><span id="dayPillLabel">—</span></p>
     </div>
+  </header>
 
-    <div class="water-bar-wrap">
-      <div class="water-bar-track">
-        <div class="water-bar-fill" id="waterBarFill" style="width:0%"></div>
-        <div class="water-bar-zone" id="waterBarZoneStart" style="left:55%"></div>
-        <div class="water-bar-zone" id="waterBarZoneEnd"   style="left:80%"></div>
-      </div>
-      <div class="water-bar-labels">
-        <span id="waterBarMin">0</span>
-        <span class="water-zone-name">healthy zone</span>
-        <span id="waterBarMax">12+</span>
-      </div>
-    </div>
-
-    <div class="water-actions">
-      <button class="water-minus-btn" id="waterMinusBtn" type="button" aria-label="Undo last">−</button>
-      <button class="water-plus-btn" id="waterPlusBtn" type="button">
-        <span id="waterPlusLabel">Drank a bottle</span>
-        <span>↑</span>
+  <section class="card water-hero" aria-labelledby="waterEyebrow">
+    <div class="water-hero-top">
+      <h2 class="water-label" id="waterEyebrow">Today</h2>
+      <button class="icon-btn" id="settingsBtn" type="button" aria-label="Water settings" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
-    <div class="water-helper" id="waterHelper">Start the day — first one in.</div>
+    <div class="water-row">
+      <span class="water-num" id="waterNum">0</span><span class="water-target" id="waterTarget">/ 7</span><span class="water-unit" id="waterUnitLabel">bottles</span>
+    </div>
+    <div class="water-sub" aria-live="polite"><span id="waterVolume"></span><span id="waterRemain"></span></div>
+    <div class="water-bar" id="waterBar" role="progressbar" aria-label="Water today" aria-valuemin="0"></div>
+    <p class="water-helper" id="waterHelper" data-state="start"><span class="water-helper-dot" aria-hidden="true"></span><span id="waterHelperText"></span></p>
 
-    <button class="why-toggle" id="whyToggle" type="button" aria-expanded="false">
-      <span>Why this target?</span>
-      <span class="why-arrow">▾</span>
+    <div class="water-actions">
+      <button class="water-minus-btn" id="waterMinusBtn" type="button" aria-label="Remove one bottle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
+      <button class="water-plus-btn" id="waterPlusBtn" type="button"><span id="waterPlusLabel">Drank a bottle</span></button>
+    </div>
+
+    <button class="why-toggle" id="whyToggle" type="button" aria-expanded="false" aria-controls="whyBody">
+      <span id="whyToggleLabel">Why this target?</span>
+      <svg class="why-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
     </button>
     <div class="why-body" id="whyBody"></div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="water-label">LAST 14 DAYS</div>
-    <div class="spark-wrap">
-      <svg class="spark-svg" id="sparkSvg" viewBox="0 0 280 70" preserveAspectRatio="none"></svg>
+  <h2 class="row-section-label">Last 14 days <span class="meta" id="histMeta" aria-live="polite"></span></h2>
+  <section class="card water-history" aria-label="Last 14 days">
+    <svg class="spark-svg" id="sparkSvg" role="img" aria-label="Water, last 14 days"></svg>
+    <div class="spark-axis" id="histList" aria-hidden="true"></div>
+    <div class="row-empty" id="histEmpty" hidden>
+      <div class="row-empty-title">No history yet</div>
+      <p class="row-empty-body">Each day you log shows up here as a bar.</p>
     </div>
-    <div id="histList" style="margin-top:14px"></div>
-  </div>
+  </section>
 </div>
 
-<!-- Settings modal -->
-<div class="modal-bg" id="setModalBg">
-  <div class="modal">
-    <h3>Settings</h3>
+<!-- Settings: bottom sheet -->
+<div class="modal-bg row-sheet-bg" id="setModalBg">
+  <div class="row-sheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="row-sheet-grab" aria-hidden="true"></div>
+    <div class="row-sheet-head">
+      <span></span>
+      <h2 id="setTitle" tabindex="-1">Water settings</h2>
+      <button class="row-sheet-done" id="setClose" type="button">Done</button>
+    </div>
+    <div class="row-sheet-body">
 
-    <div class="set-section">
-      <h4>Profile</h4>
-      <div class="field-row">
-        <div class="field">
-          <label>Weight</label>
-          <input type="number" id="setWeight" step="0.5" min="20" max="300">
-        </div>
-        <div class="field">
-          <label>Weight unit</label>
-          <div class="seg" id="setWeightUnit">
-            <button data-u="kg">kg</button>
-            <button data-u="lb">lb</button>
+      <section class="set-section" aria-labelledby="setProfileH">
+        <h3 class="set-label" id="setProfileH">Profile</h3>
+        <div class="row-form-rows">
+          <div class="row-form-row">
+            <label for="setWeight">Weight</label>
+            <input type="number" id="setWeight" inputmode="decimal" step="0.5" min="20" max="300">
+            <div class="seg seg--compact" id="setWeightUnit" role="group" aria-label="Weight unit">
+              <button type="button" data-u="kg">kg</button>
+              <button type="button" data-u="lb">lb</button>
+            </div>
+          </div>
+          <div class="row-form-row">
+            <label for="setAge">Age</label>
+            <input type="number" id="setAge" inputmode="numeric" min="13" max="100">
+            <span class="row-form-unit">yrs</span>
+          </div>
+          <div class="row-form-row">
+            <span class="row-form-label" id="setSexLabel">Sex</span>
+            <div class="seg" id="setSex" role="group" aria-labelledby="setSexLabel">
+              <button type="button" data-s="m">Male</button>
+              <button type="button" data-s="f">Female</button>
+              <button type="button" data-s="o">Other</button>
+            </div>
+          </div>
+          <div class="row-form-row">
+            <label for="setActivity">Training</label>
+            <input type="number" id="setActivity" inputmode="decimal" min="0" max="40" step="0.5">
+            <span class="row-form-unit">h/week</span>
           </div>
         </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Age</label>
-          <input type="number" id="setAge" min="13" max="100">
-        </div>
-        <div class="field">
-          <label>Sex</label>
-          <div class="seg" id="setSex">
-            <button data-s="m">Male</button>
-            <button data-s="f">Female</button>
-            <button data-s="o">Other</button>
+      </section>
+
+      <section class="set-section" aria-labelledby="setDisplayH">
+        <h3 class="set-label" id="setDisplayH">Display</h3>
+        <div class="row-form-rows">
+          <div class="row-form-row row-form-row--stack">
+            <span class="row-form-label" id="setUnitLabel">Count water in</span>
+            <div class="seg" id="setUnit" role="group" aria-labelledby="setUnitLabel">
+              <button type="button" data-u="bottle">Bottles</button>
+              <button type="button" data-u="glass">Glasses</button>
+              <button type="button" data-u="oz">oz</button>
+              <button type="button" data-u="ml">ml</button>
+            </div>
+          </div>
+          <div class="row-form-row">
+            <label for="setBottleMl">Bottle size</label>
+            <input type="number" id="setBottleMl" inputmode="numeric" min="100" max="2000" step="50">
+            <span class="row-form-unit">ml</span>
+          </div>
+          <div class="row-form-row">
+            <label for="setGlassMl">Glass size</label>
+            <input type="number" id="setGlassMl" inputmode="numeric" min="100" max="500" step="10">
+            <span class="row-form-unit">ml</span>
           </div>
         </div>
-      </div>
-      <div class="field">
-        <label>Activity (training hours per week)</label>
-        <input type="number" id="setActivity" min="0" max="40" step="0.5">
-      </div>
-    </div>
+        <p class="row-field-help">Switching units converts logged days, so totals stay the same. A new bottle or glass size applies to past days too, because they are stored as counts.</p>
+      </section>
 
-    <div class="set-section">
-      <h4>Display</h4>
-      <div class="field">
-        <label>Show water as</label>
-        <div class="seg" id="setUnit">
-          <button data-u="bottle">Bottles</button>
-          <button data-u="glass">Glasses</button>
-          <button data-u="oz">oz</button>
-          <button data-u="ml">ml</button>
+      <section class="set-section" aria-labelledby="setCaffeineH">
+        <h3 class="set-label" id="setCaffeineH">Caffeine</h3>
+        <div class="row-form-rows">
+          <div class="row-form-row">
+            <label for="setCaffeine">Average per day</label>
+            <input type="number" id="setCaffeine" inputmode="numeric" min="0" max="1000" step="10">
+            <span class="row-form-unit">mg</span>
+          </div>
         </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Bottle size (ml)</label>
-          <input type="number" id="setBottleMl" min="100" max="2000" step="50">
-        </div>
-        <div class="field">
-          <label>Glass size (ml)</label>
-          <input type="number" id="setGlassMl" min="100" max="500" step="10">
-        </div>
-      </div>
-    </div>
+        <p class="row-field-help">1 cup of coffee ≈ 95 mg · espresso shot 75 mg · energy drink 160 mg. Above 200 mg a day adds a little to your target.</p>
+      </section>
 
-    <div class="set-section">
-      <h4>Caffeine</h4>
-      <div class="field">
-        <label>Average caffeine per day (mg)</label>
-        <input type="number" id="setCaffeine" min="0" max="1000" step="10">
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px;line-height:1.4">
-          ~1 cup of coffee = 95mg · espresso shot = 75mg · energy drink = 160mg.
-          Above 200mg/day starts to add a small water requirement.
-        </div>
-      </div>
-    </div>
-
-    <div class="set-section">
-      <h4>Stimulants & meds</h4>
-      <div class="field">
-        <label>Search to add</label>
+      <section class="set-section" aria-labelledby="setSubsH">
+        <h3 class="set-label" id="setSubsH">Stimulants &amp; meds</h3>
         <div class="search-wrap">
-          <input type="text" class="search-input" id="subSearch" placeholder="Type a name (Adderall, Concerta, Lithium…)" autocomplete="off">
-          <div class="search-results" id="subResults"></div>
+          <label class="row-sr-only" for="subSearch">Search stimulants and meds</label>
+          <input type="search" class="search-input" id="subSearch" placeholder="Search Concerta, lithium, creatine…" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" aria-controls="subResults">
         </div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px;line-height:1.4">
-          Each substance bumps your daily water target. Includes ADHD stims,
-          diuretics, decongestants, nicotine, alcohol, and a few others.
+        <div class="search-results" id="subResults"></div>
+        <p class="row-field-help">Each one raises your daily target. Covers ADHD stimulants, diuretics, decongestants, nicotine, alcohol and more.</p>
+        <div class="subs-list" id="subsList"></div>
+      </section>
+
+      <section class="set-section" aria-labelledby="setDataH">
+        <h3 class="set-label" id="setDataH">Data</h3>
+        <div class="set-data">
+          <div class="row-list">
+            <button type="button" class="row-list-row" id="setExport">Export data</button>
+            <button type="button" class="row-list-row" id="setImport">Import data</button>
+          </div>
+          <button type="button" class="row-btn row-btn--danger row-btn--block" id="setReset">Reset all water data</button>
         </div>
-      </div>
-      <div class="subs-list" id="subsList"></div>
-    </div>
+        <input type="file" id="setImportFile" accept=".json,application/json" hidden>
+      </section>
 
-    <div class="set-section">
-      <h4>Data</h4>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn-secondary" id="setExport">Export JSON</button>
-        <button class="btn-secondary" id="setImport">Import JSON</button>
-        <button class="btn-secondary" id="setReset" style="color:var(--bad);border-color:rgba(255,138,138,0.3)">Reset all</button>
-      </div>
-      <input type="file" id="setImportFile" accept=".json" style="display:none">
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn-primary" id="setClose">Done</button>
     </div>
   </div>
 </div>
@@ -630,6 +905,7 @@ html, body {
 <script>
 (function() {
   const $ = (id) => document.getElementById(id);
+  const isEmbedded = document.documentElement.classList.contains('is-embedded');
 
   // ============================================================
   // SUBSTANCE DATABASE — daily water bumps scale with YOUR dose.
@@ -694,34 +970,57 @@ html, body {
     return normalize({});
   }
   function normalize(s) {
-    s = s || {};
+    s = (s && typeof s === 'object' && !Array.isArray(s)) ? s : {};
     s.unit = s.unit || CONFIG.unit || 'bottle';
     s.bottleMl = s.bottleMl || CONFIG.bottleMl || 500;
     s.glassMl  = s.glassMl  || CONFIG.glassMl  || 250;
     s.weightUnit = s.weightUnit || 'kg';
     s.profile = Object.assign({}, CONFIG.profile, s.profile || {});
     s.caffeineMgPerDay = (s.caffeineMgPerDay != null) ? s.caffeineMgPerDay : (CONFIG.caffeineMgPerDay || 200);
-    s.substances = Array.isArray(s.substances) ? s.substances : (CONFIG.defaultSubstances || []);
-    s.logs = (s.logs && typeof s.logs === 'object') ? s.logs : {};  // {YYYY-MM-DD: number_of_servings}
+    s.substances = Array.isArray(s.substances) ? s.substances : (CONFIG.defaultSubstances || []).slice();
+    s.logs = (s.logs && typeof s.logs === 'object' && !Array.isArray(s.logs)) ? s.logs : {};  // {YYYY-MM-DD: number_of_servings}
+    // Counts must be positive numbers: a stored "4" would turn the next +1 into "41"
+    Object.keys(s.logs).forEach(k => {
+      const n = Number(s.logs[k]);
+      if (n > 0 && isFinite(n)) s.logs[k] = n; else delete s.logs[k];
+    });
     return s;
   }
+  let selfEvent = false;
   function saveState() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+    // A page's own setItem fires no 'storage' event in the same document; topbar.js's
+    // water pill listens for one (key-less, so sync.js ignores it).
+    selfEvent = true;
+    try { window.dispatchEvent(new Event('storage')); } catch (e) {}
+    selfEvent = false;
+  }
+  // Every write starts from what's in storage now: the top-bar "+", Health and cloud sync
+  // all write po_water_v1 from outside this page, and saving a stale copy would undo them.
+  // fn edits the fresh state in place; returning false skips the save.
+  function mutate(fn) {
+    state = loadState();
+    if (fn(state) === false) return false;
+    saveState();
+    return true;
   }
   let state = loadState();
-  $('appTitle').textContent = CONFIG.appTitle || 'Water Coach';
+  $('appTitle').textContent = CONFIG.appTitle || 'Water';
 
   // Helpers
   function dateKey(d) {
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   }
   function todayKey() { return dateKey(new Date()); }
-  function todayCount() { return state.logs[todayKey()] || 0; }
-  function setTodayCount(n) {
-    const k = todayKey();
-    if (n <= 0) delete state.logs[k];
-    else state.logs[k] = n;
-    saveState();
+  function todayCount() { return Number(state.logs[todayKey()]) || 0; }
+  function addToday(delta) {
+    return mutate(s => {
+      const k = todayKey();
+      const cur = Number(s.logs[k]) || 0;
+      const n = Math.max(0, cur + delta);
+      if (n === cur) return false;
+      if (n > 0) s.logs[k] = n; else delete s.logs[k];
+    });
   }
 
   // ============================================================
@@ -749,11 +1048,21 @@ html, body {
     };
   }
 
-  function unitVolMl() {
-    if (state.unit === 'bottle') return state.bottleMl || 500;
-    if (state.unit === 'glass')  return state.glassMl  || 250;
-    if (state.unit === 'oz')     return 30;     // 1 fl oz ≈ 29.57 ml
-    return 1;                                   // ml
+  function unitVolOf(s, unit) {
+    if (unit === 'bottle') return s.bottleMl || 500;
+    if (unit === 'glass')  return s.glassMl  || 250;
+    if (unit === 'oz')     return 30;     // 1 fl oz ≈ 29.57 ml
+    return 1;                             // ml
+  }
+  function unitVolMl() { return unitVolOf(state, state.unit); }
+  // Daily target in the current unit (topbar.js mirrors this, including the floor of 1)
+  function targetUnitsOf(calc) { return Math.max(1, Math.ceil(calc.total / unitVolMl())); }
+  // One tap logs one bottle or glass; in oz/ml a tap logs a serving (8 oz, or one glass in ml),
+  // because 1 oz or 1 ml per tap made those modes unusable.
+  function stepUnits() {
+    if (state.unit === 'oz') return 8;
+    if (state.unit === 'ml') return state.glassMl || 250;
+    return 1;
   }
   function unitLabelPlural() {
     if (state.unit === 'bottle') return 'bottles';
@@ -775,138 +1084,228 @@ html, body {
   // ============================================================
   // RENDER
   // ============================================================
-  function renderDayPill() {
-    const d = new Date();
-    const dows = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-    const mons = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-    $('dayPillLabel').textContent = dows[d.getDay()] + ', ' + mons[d.getMonth()] + ' ' + d.getDate();
+  const DOWS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function dayLabel(d) { return DOWS[d.getDay()] + ' ' + d.getDate() + ' ' + MONS[d.getMonth()]; }
+  function fmtCount(n) { return Number(n).toLocaleString('en-US', { maximumFractionDigits: 1 }); }
+  function fmtMlExact(v) { return Math.round(v).toLocaleString('en-US') + ' ml'; }
+
+  // Pace: the same day window as Main's Day Ring (up 06:30, bed 22:00), finishing an hour before bed
+  const DAY_START = 6.5, DAY_DONE = 21;
+  function hoursNow() { const d = new Date(); return d.getHours() + d.getMinutes() / 60; }
+  function expectedByNow(targetUnits) {
+    const f = Math.min(1, Math.max(0, (hoursNow() - DAY_START) / (DAY_DONE - DAY_START)));
+    return Math.floor(targetUnits * f);
+  }
+  function fmtClock(h) {
+    const m = Math.min(24 * 60 - 1, Math.round(h * 60));
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  }
+
+  let shownDay = todayKey();
+  function renderDayPill(calc) {
+    $('dayPillLabel').textContent = dayLabel(new Date()) + ' · ' + fmtMl((calc || computeTargetMl()).total) + ' target';
   }
 
   function renderWater() {
+    shownDay = todayKey();
     const calc = computeTargetMl();
-    const targetUnits = Math.ceil(calc.total / unitVolMl());
+    const targetUnits = targetUnitsOf(calc);
     const count = todayCount();
-    const unitName = unitLabelPlural();
+    const plural = unitLabelPlural(), step = stepUnits();
+    renderDayPill(calc);
 
-    $('waterUnitLabel').textContent = unitName.toUpperCase() + ' DRANK TODAY';
-    $('waterNum').textContent = count;
-    $('waterTarget').textContent = '/ ' + targetUnits;
-    $('waterPlusLabel').textContent = 'Drank a ' + unitLabelSingular();
-
-    // Progress bar with three zones: low (0-65%), healthy (65-100%), over (100-150%)
-    const pctRaw = (count / targetUnits) * 100;
-    const fillPct = Math.min(150, pctRaw) / 1.5;   // bar represents 0-150%
-    const fill = $('waterBarFill');
-    fill.style.width = fillPct + '%';
-    fill.classList.toggle('over', pctRaw > 100);
-    $('waterBarMin').textContent = '0';
-    $('waterBarMax').textContent = (Math.ceil(targetUnits * 1.5)) + '+';
-    // Healthy zone bands at 65% and 100%
-    $('waterBarZoneStart').style.left = (65 / 1.5) + '%';
-    $('waterBarZoneEnd').style.left   = (100 / 1.5) + '%';
-
-    // Helper text
-    const helper = $('waterHelper');
-    if (count === 0) { helper.textContent = 'Start the day — first one in.'; helper.classList.remove('good'); }
-    else if (pctRaw < 50) { helper.textContent = 'Behind pace — drink one in the next hour.'; helper.classList.remove('good'); }
-    else if (pctRaw < 100) { helper.textContent = (targetUnits - count) + ' to go. Pacing well.'; helper.classList.remove('good'); }
-    else if (pctRaw < 130) { helper.textContent = '✓ Target hit — top up if you train this evening.'; helper.classList.add('good'); }
-    else { helper.textContent = 'Strong — way past target.'; helper.classList.add('good'); }
-
-    // Disable minus when at zero
+    $('waterNum').textContent = fmtCount(count);
+    $('waterTarget').textContent = '/ ' + fmtCount(targetUnits);
+    $('waterUnitLabel').textContent = plural;
+    $('waterPlusLabel').textContent = step > 1 ? 'Add ' + step + ' ' + plural : 'Drank a ' + unitLabelSingular();
+    $('waterMinusBtn').setAttribute('aria-label', step > 1 ? 'Remove ' + step + ' ' + plural : 'Remove one ' + unitLabelSingular());
     $('waterMinusBtn').disabled = count <= 0;
 
+    $('waterVolume').textContent = fmtMl(count * unitVolMl()) + ' of ' + fmtMl(calc.total);
+    $('waterRemain').textContent = count > targetUnits ? '+' + fmtCount(count - targetUnits) + ' over'
+      : count === targetUnits ? 'Target reached'
+      : fmtCount(targetUnits - count) + ' to go';
+
+    const expected = expectedByNow(targetUnits);
+    renderBar(count, targetUnits, expected);
+    renderHelper(count, targetUnits, expected, step);
     renderWhy(calc, targetUnits);
-    renderHistory();
-    renderSparkline(targetUnits);
+    renderHistory(targetUnits);
+  }
+
+  // One segment per bottle/glass (≤24); a continuous bar with a pace marker for oz/ml.
+  // Segments between the count and where you should be by now are 'due'.
+  function renderBar(count, target, expected) {
+    const bar = $('waterBar');
+    bar.setAttribute('aria-valuemax', target);
+    bar.setAttribute('aria-valuenow', Math.min(count, target));
+    bar.setAttribute('aria-valuetext', fmtCount(count) + ' of ' + fmtCount(target) + ' ' + unitLabelPlural());
+    if (target <= 24) {
+      if (bar.dataset.mode !== 'seg' || bar.children.length !== target) {
+        bar.dataset.mode = 'seg';
+        bar.className = 'water-bar is-seg';
+        bar.innerHTML = new Array(target + 1).join('<i></i>');
+      }
+      for (let i = 0; i < target; i++) {
+        bar.children[i].classList.toggle('on', i < count);
+        bar.children[i].classList.toggle('due', i >= count && i < expected);
+      }
+    } else {
+      if (bar.dataset.mode !== 'cont') {
+        bar.dataset.mode = 'cont';
+        bar.className = 'water-bar is-cont';
+        bar.innerHTML = '<i></i><span class="water-bar-marker"></span>';
+      }
+      bar.firstChild.style.width = Math.min(100, count / target * 100) + '%';
+      const mk = bar.lastChild;
+      mk.hidden = !(expected > count && expected < target);
+      mk.style.left = (expected / target * 100) + '%';
+    }
+  }
+
+  // Coach line from the clock, not just the percentage: 1 of 9 at 08:00 is fine, 5 of 9 at 20:30 isn't.
+  function renderHelper(count, target, expected, step) {
+    const helper = $('waterHelper');
+    let st, text;
+    if (count >= target) {
+      st = 'done';
+      text = count >= Math.ceil(target * 1.3) ? 'Well past target. No need to push more today.'
+        : 'Target reached. Top up if you train tonight.';
+    } else if (expected - count >= step) {
+      st = 'behind';
+      const short = step > 1 ? fmtMl((expected - count) * unitVolMl()) : String(expected - count);
+      text = hoursNow() >= DAY_DONE
+        ? (step > 1 ? fmtMl((target - count) * unitVolMl()) : (target - count)) + ' short of today’s target. Have one before bed.'
+        : short + ' behind pace. Have one now.';
+    } else if (count === 0) {
+      st = 'start';
+      text = 'Nothing logged yet. Start with one now.';
+    } else {
+      st = 'pace';
+      const next = DAY_START + Math.min(target, count + step) / target * (DAY_DONE - DAY_START);
+      text = 'On pace. Next one by ' + fmtClock(next) + '.';
+    }
+    helper.dataset.state = st;
+    $('waterHelperText').textContent = text;
   }
 
   function renderWhy(calc, targetUnits) {
-    const wrap = $('whyBody');
-    const u = state.weightUnit;
-    const wDisp = u === 'lb' ? (state.profile.weightKg).toFixed(0) : state.profile.weightKg.toFixed(0);
-    let html = '';
-    html += '<div class="why-row"><span class="why-label">Base (' + wDisp + ' ' + u + ' × 35 ml)</span><span class="why-val">' + fmtMl(calc.base) + '</span></div>';
+    const p = state.profile, lb = state.weightUnit === 'lb';
+    const plural = unitLabelPlural();
+    const row = (label, val) => '<div class="why-row"><span class="why-label">' + label + '</span><span class="why-val">' + val + '</span></div>';
+    const w = Number(p.weightKg) || 0;
+    const wLabel = fmtCount(w) + (lb ? ' lb ≈ ' + Math.round(w / 2.20462) + ' kg' : ' kg');
+    // The total shown is the sum of the rounded rows, so the column visibly adds up
+    let shownTotal = 0;
+    const part = (v) => { shownTotal += Math.round(v); return fmtMlExact(v); };
+    let html = row('Body weight · ' + escape(wLabel) + ' × 35 ml', part(calc.base));
     if (calc.exercise > 0)
-      html += '<div class="why-row"><span class="why-label">+ Exercise (' + state.profile.activityHrsPerWeek + ' h/wk)</span><span class="why-val">+ ' + fmtMl(calc.exercise) + '</span></div>';
+      html += row('Training · ' + escape(fmtCount(p.activityHrsPerWeek)) + ' h/week', '+' + part(calc.exercise));
     if (calc.caffeine > 0)
-      html += '<div class="why-row"><span class="why-label">+ Caffeine (' + state.caffeineMgPerDay + ' mg/day)</span><span class="why-val">+ ' + fmtMl(calc.caffeine) + '</span></div>';
+      html += row('Caffeine · ' + escape(fmtCount(state.caffeineMgPerDay)) + ' mg/day', '+' + part(calc.caffeine));
     (state.substances || []).forEach(s => {
-      html += '<div class="why-row"><span class="why-label">+ ' + escape(s.name) + ' (' + escape(subDoseLabel(s)) + ')</span><span class="why-val">+ ' + fmtMl(subExtraMl(s)) + '</span></div>';
+      html += row(escape(s.name) + ' · ' + escape(subDoseLabel(s)), '+' + part(subExtraMl(s)));
     });
-    if (calc.adjust > 0)
-      html += '<div class="why-row"><span class="why-label">+ Sex / age adjustment</span><span class="why-val">+ ' + fmtMl(calc.adjust) + '</span></div>';
-    html += '<div class="why-row total"><span class="why-label">Daily target</span><span class="why-val">' + fmtMl(calc.total) + ' ≈ ' + targetUnits + ' ' + unitLabelPlural() + '</span></div>';
-    wrap.innerHTML = html;
+    if (calc.adjust > 0) html += row('Sex and age', '+' + part(calc.adjust));
+    const totalVal = fmtMlExact(shownTotal) + (state.unit === 'ml' ? '' : ' · ' + fmtCount(targetUnits) + ' ' + plural);
+    html += '<div class="why-row total"><span class="why-label">Daily target</span><span class="why-val">' + totalVal + '</span></div>';
+    $('whyBody').innerHTML = html;
+    $('whyToggleLabel').textContent = 'Why ' + fmtCount(targetUnits) + ' ' + plural + '?';
   }
 
-  function renderHistory() {
-    const list = $('histList');
-    const target = Math.ceil(computeTargetMl().total / unitVolMl());
-    // Last 7 days
+  // ----- History: 14 bars (oldest first, today last). Tap a bar to read that day. -----
+  let histSel = -1;   // selected bar index, -1 = none (shows the summary)
+  function historyDays() {
     const days = [];
-    for (let i = 6; i >= 1; i--) {
+    for (let i = 13; i >= 0; i--) {
       const d = new Date();
+      d.setHours(12, 0, 0, 0);   // noon, so DST changes can't skip or repeat a date
       d.setDate(d.getDate() - i);
       const k = dateKey(d);
-      const n = state.logs[k] || 0;
-      days.push({ date: d, key: k, count: n });
+      days.push({ date: d, key: k, count: Number(state.logs[k]) || 0 });
     }
-    list.innerHTML = days.map(({date, count}) => {
-      const dows = ['Sun','Mon','Tue','Wed','THU','Fri','Sat'];
-      const lbl = dows[date.getDay()] + ' ' + (date.getMonth()+1) + '/' + date.getDate();
-      const pct = Math.min(100, (count / target) * 100);
-      const cls = (count >= target) ? '' : 'miss';
-      return '<div class="hist-row">'
-        + '<span class="hist-date">' + lbl + '</span>'
-        + '<div class="hist-bar-wrap"><div class="hist-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div>'
-        + '<span class="hist-count">' + count + '/' + target + '</span>'
-        + '</div>';
-    }).join('') || '<div style="text-align:center;font-size:12px;color:var(--text-3);padding:12px 0">No logs yet.</div>';
+    return days;
   }
+  function renderHistory(target) {
+    const days = historyDays();
+    const any = days.some(d => d.count > 0);
+    const meta = $('histMeta');
+    $('histEmpty').hidden = any;
+    $('sparkSvg').toggleAttribute('hidden', !any);
+    $('histList').hidden = !any;
+    if (!any) { histSel = -1; meta.textContent = ''; meta.classList.remove('is-sel'); return; }
 
-  function renderSparkline(target) {
-    const svg = $('sparkSvg');
-    const W = 280, H = 70, pad = 4;
-    const days = 14;
-    const data = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const k = dateKey(d);
-      data.push(state.logs[k] || 0);
+    // Summary over the previous 13 days that have a log (today is still in progress)
+    const past = days.slice(0, 13).filter(d => d.count > 0);
+    let summary = '';
+    if (past.length) {
+      const avg = past.reduce((a, d) => a + d.count, 0) / past.length;
+      const met = past.filter(d => d.count >= target).length;
+      summary = 'avg ' + (avg < 10 ? avg.toFixed(1) : fmtCount(Math.round(avg))) + ' · ' + met + ' of ' + past.length + ' on target';
     }
+    if (histSel >= 0) {
+      const d = days[histSel];
+      meta.textContent = (histSel === 13 ? 'Today' : dayLabel(d.date)) + ' · ' + fmtCount(d.count) + ' of ' + fmtCount(target);
+    } else {
+      meta.textContent = summary;
+    }
+    meta.classList.toggle('is-sel', histSel >= 0);
+
+    renderSparkline(days, target, summary);
+    $('histList').innerHTML = days.map((d, i) =>
+      '<span class="' + (i === 13 ? 'is-today' : '') + (i === histSel ? ' is-sel' : '') + '">' + DOWS[d.date.getDay()].charAt(0) + '</span>'
+    ).join('');
+  }
+  function renderSparkline(days, target, summary) {
+    const svg = $('sparkSvg');
+    // Draw in real pixels (no preserveAspectRatio stretch); 326 = card width at 390px when not laid out yet
+    const W = Math.round(svg.getBoundingClientRect().width) || 326, H = 88, top = 4;
+    const data = days.map(d => d.count);
     const maxVal = Math.max(target, Math.max.apply(null, data)) || 1;
-    const colW = (W - pad * 2) / data.length;
-    const barW = colW * 0.7;
-    let html = '';
-    // Target line
-    const targetY = H - pad - (target / maxVal) * (H - pad * 2);
-    html += '<line class="spark-target" x1="0" x2="' + W + '" y1="' + targetY.toFixed(1) + '" y2="' + targetY.toFixed(1) + '"/>';
+    const colW = W / data.length, barW = Math.min(14, colW * 0.56);
+    const y = v => H - v / maxVal * (H - top);
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    let html = '<line class="spark-target" x1="0" x2="' + W + '" y1="' + y(target).toFixed(1) + '" y2="' + y(target).toFixed(1) + '"/>';
     data.forEach((v, i) => {
-      const x = pad + i * colW + (colW - barW) / 2;
-      const h = (v / maxVal) * (H - pad * 2);
-      const y = H - pad - h;
-      const cls = (v >= target) ? 'spark-bar' : 'spark-bar miss';
-      html += '<rect class="' + cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + Math.max(0, h).toFixed(1) + '" rx="2"/>';
+      let cls = 'spark-bar';
+      if (!v) cls += ' zero';
+      else if (v < target) cls += (i === data.length - 1) ? ' today' : ' miss';
+      if (i === histSel) cls += ' sel';
+      const h = v ? Math.max(3, H - y(v)) : 2;
+      const x = i * colW + (colW - barW) / 2;
+      html += '<rect class="' + cls + '" x="' + x.toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3"/>';
+    });
+    days.forEach((d, i) => {
+      html += '<rect class="spark-hit" data-i="' + i + '" x="' + (i * colW).toFixed(1) + '" y="0" width="' + colW.toFixed(1) + '" height="' + H + '">'
+        + '<title>' + dayLabel(d.date) + ': ' + fmtCount(d.count) + ' of ' + fmtCount(target) + ' ' + unitLabelPlural() + '</title></rect>';
     });
     svg.innerHTML = html;
+    svg.classList.toggle('has-sel', histSel >= 0);
+    svg.setAttribute('aria-label', 'Water, last 14 days' + (summary ? ': ' + summary : ''));
   }
 
-  function renderAll() { renderDayPill(); renderWater(); }
+  function renderAll() { renderWater(); }
 
   // ============================================================
   // EVENT WIRING
   // ============================================================
+  function replayAnim(el, cls) {
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;   // restart the animation on quick repeat taps
+    el.classList.add(cls);
+    el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+  }
   $('waterPlusBtn').addEventListener('click', () => {
-    setTodayCount(todayCount() + 1);
+    addToday(stepUnits());
     renderWater();
-    const btn = $('waterPlusBtn');
-    btn.style.transform = 'scale(0.97)';
-    setTimeout(() => { btn.style.transform = ''; }, 120);
+    replayAnim($('waterNum'), 'tick');
+    const bar = $('waterBar');
+    if (bar.dataset.mode === 'seg') replayAnim(bar.children[todayCount() - 1], 'pop');
   });
   $('waterMinusBtn').addEventListener('click', () => {
-    setTodayCount(Math.max(0, todayCount() - 1));
+    addToday(-stepUnits());
     renderWater();
   });
 
@@ -917,10 +1316,32 @@ html, body {
     $('whyToggle').setAttribute('aria-expanded', open ? 'false' : 'true');
   });
 
+  // History: tap a bar to read that day; tap it again (or anywhere else) for the summary
+  // (The column comes from the tap position, so a re-render between press and release can't eat the tap.)
+  $('sparkSvg').addEventListener('click', (e) => {
+    const r = $('sparkSvg').getBoundingClientRect();
+    if (!r.width) return;
+    const i = Math.min(13, Math.max(0, Math.floor((e.clientX - r.left) / (r.width / 14))));
+    histSel = histSel === i ? -1 : i;
+    renderHistory(targetUnitsOf(computeTargetMl()));
+  });
+  document.addEventListener('click', (e) => {
+    if (histSel < 0) return;
+    // composedPath: the tapped bar may already have been replaced by the re-render above
+    const path = e.composedPath ? e.composedPath() : [];
+    if (path.some(n => n.classList && n.classList.contains('water-history'))) return;
+    histSel = -1;
+    renderHistory(targetUnitsOf(computeTargetMl()));
+  });
+  window.addEventListener('resize', () => renderHistory(targetUnitsOf(computeTargetMl())));
+
   // ============================================================
   // SETTINGS
   // ============================================================
+  function weightLimits() { return state.weightUnit === 'lb' ? [44, 660] : [20, 300]; }
   function renderSettings() {
+    const wl = weightLimits();
+    $('setWeight').min = wl[0]; $('setWeight').max = wl[1];
     $('setWeight').value = state.profile.weightKg;
     $('setAge').value = state.profile.age;
     $('setActivity').value = state.profile.activityHrsPerWeek;
@@ -936,153 +1357,349 @@ html, body {
   }
   function setSegActive(segId, value) {
     $(segId).querySelectorAll('button').forEach(b => {
-      const v = b.dataset.u || b.dataset.s;
-      b.classList.toggle('active', v === value);
+      const on = (b.dataset.u || b.dataset.s) === value;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   }
   function bindSeg(segId, attr, onPick) {
     $(segId).querySelectorAll('button').forEach(b => {
       b.addEventListener('click', () => {
-        const v = b.dataset[attr];
-        $(segId).querySelectorAll('button').forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
-        onPick(v);
+        onPick(b.dataset[attr]);
+        renderWater();
+        setSegActive('setUnit', state.unit);
+        setSegActive('setWeightUnit', state.weightUnit);
+        setSegActive('setSex', state.profile.sex);
       });
     });
   }
-  bindSeg('setUnit', 'u', (v) => { state.unit = v; saveState(); renderWater(); });
-  bindSeg('setWeightUnit', 'u', (v) => { state.weightUnit = v; saveState(); renderWater(); });
-  bindSeg('setSex', 's', (v) => { state.profile.sex = v; saveState(); renderWater(); });
+  // Logs are counts of the current unit, so switching units converts them and the
+  // volume you logged stays the same (6 bottles of 500 ml become 12 glasses of 250 ml).
+  bindSeg('setUnit', 'u', (v) => mutate(s => {
+    if (s.unit === v) return false;
+    const factor = unitVolOf(s, s.unit) / unitVolOf(s, v);
+    Object.keys(s.logs).forEach(k => {
+      const n = Math.round((Number(s.logs[k]) || 0) * factor);
+      if (n > 0) s.logs[k] = n; else delete s.logs[k];
+    });
+    s.unit = v;
+  }));
+  // kg ↔ lb converts the stored number too, so the target doesn't jump
+  bindSeg('setWeightUnit', 'u', (v) => {
+    mutate(s => {
+      if (s.weightUnit === v) return false;
+      const w = Number(s.profile.weightKg) || 0;
+      if (w > 0) s.profile.weightKg = Math.round((v === 'lb' ? w * 2.20462 : w / 2.20462) * 2) / 2;
+      s.weightUnit = v;
+    });
+    const wl = weightLimits();
+    $('setWeight').min = wl[0]; $('setWeight').max = wl[1];
+    $('setWeight').value = state.profile.weightKg;
+  });
+  bindSeg('setSex', 's', (v) => mutate(s => {
+    if (s.profile.sex === v) return false;
+    s.profile.sex = v;
+  }));
 
-  ['setWeight','setAge','setActivity','setCaffeine','setBottleMl','setGlassMl'].forEach(id => {
-    $(id).addEventListener('input', () => {
-      const v = parseFloat($(id).value);
-      if (id === 'setWeight') state.profile.weightKg = v || 0;
-      else if (id === 'setAge') state.profile.age = v || 0;
-      else if (id === 'setActivity') state.profile.activityHrsPerWeek = v || 0;
-      else if (id === 'setCaffeine') state.caffeineMgPerDay = v || 0;
-      else if (id === 'setBottleMl') state.bottleMl = v || 500;
-      else if (id === 'setGlassMl') state.glassMl = v || 250;
-      saveState(); renderWater();
+  const NUM_FIELDS = {
+    setWeight:   { get: s => s.profile.weightKg,           set: (s, v) => { s.profile.weightKg = v; },           lim: () => weightLimits() },
+    setAge:      { get: s => s.profile.age,                set: (s, v) => { s.profile.age = v; },                lim: () => [13, 100] },
+    setActivity: { get: s => s.profile.activityHrsPerWeek, set: (s, v) => { s.profile.activityHrsPerWeek = v; }, lim: () => [0, 40] },
+    setCaffeine: { get: s => s.caffeineMgPerDay,           set: (s, v) => { s.caffeineMgPerDay = v; },           lim: () => [0, 1000] },
+    setBottleMl: { get: s => s.bottleMl,                   set: (s, v) => { s.bottleMl = v; },                   lim: () => [100, 2000] },
+    setGlassMl:  { get: s => s.glassMl,                    set: (s, v) => { s.glassMl = v; },                    lim: () => [100, 500] }
+  };
+  function saveField(f, v) {
+    if (mutate(s => { if (f.get(s) === v) return false; f.set(s, v); })) renderWater();
+  }
+  Object.keys(NUM_FIELDS).forEach(id => {
+    const f = NUM_FIELDS[id], el = $(id);
+    // Live while typing, but only values already in range: typing "750" must not save 7 and 75 on the way
+    el.addEventListener('input', () => {
+      const v = parseFloat(el.value), lim = f.lim();
+      if (isFinite(v) && v >= lim[0] && v <= lim[1]) saveField(f, v);
+    });
+    // On commit: clamp into range, or put back the saved value if the field was left empty
+    el.addEventListener('change', () => {
+      const v = parseFloat(el.value), lim = f.lim();
+      if (!isFinite(v)) { state = loadState(); el.value = f.get(state); return; }
+      const c = Math.min(lim[1], Math.max(lim[0], v));
+      if (c !== v) el.value = c;
+      saveField(f, c);
     });
   });
 
+  // ----- Stimulants & meds -----
+  const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+  const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+  function subMeta(s) { return (s.unit || 'dose') + ' · +' + fmtMlExact(subExtraMl(s)) + '/day'; }
+  // Rows carry index + id; after a re-read the index is checked against the id, so an
+  // edit can never land on a different substance than the one on screen.
+  function findSubIndex(s, i, id, name) {
+    const list = s.substances || [];
+    const at = list[i];
+    if (at && (at.id || '') === id && (id || at.name === name)) return i;
+    return id ? list.findIndex(x => x && x.id === id) : list.findIndex(x => x && x.name === name);
+  }
   function renderSubsList() {
     const list = $('subsList');
     if (!state.substances || !state.substances.length) {
-      list.innerHTML = '<div style="font-size:12px;color:var(--text-3);text-align:center;padding:14px 0;font-style:italic;">No substances added.</div>';
+      list.innerHTML = '<p class="subs-empty">None added yet. Search above to add one.</p>';
       return;
     }
-    list.innerHTML = state.substances.map((s, i) =>
-      '<div class="sub-row" data-i="' + i + '">'
-      + '<div class="sub-row-info">'
-      +   '<div class="sub-row-name">' + escape(s.name) + '</div>'
-      +   '<div class="sub-row-meta">+ ' + fmtMl(subExtraMl(s)) + ' / day · ' + escape(s.cat || '') + '</div>'
-      + '</div>'
-      + '<div class="sub-row-dose">'
-      +   '<input type="number" class="sub-dose-input" data-i="' + i + '" min="0" step="0.5" value="' + (s.dose != null ? s.dose : s.defaultDose) + '">'
-      +   '<span class="sub-dose-unit">' + escape(s.unit || '') + '</span>'
-      + '</div>'
-      + '<button class="sub-row-del" data-i="' + i + '" aria-label="Remove">×</button>'
-      + '</div>'
-    ).join('');
-    list.querySelectorAll('.sub-dose-input').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const i = parseInt(inp.dataset.i, 10);
-        state.substances[i].dose = parseFloat(inp.value) || 0;
-        saveState();
-        // Re-render the meta line for this row + the why card
-        const row = inp.closest('.sub-row');
-        const meta = row.querySelector('.sub-row-meta');
-        meta.textContent = '+ ' + fmtMl(subExtraMl(state.substances[i])) + ' / day · ' + (state.substances[i].cat || '');
-        renderWater();
-      });
-    });
-    list.querySelectorAll('.sub-row-del').forEach(b => {
-      b.addEventListener('click', () => {
-        state.substances.splice(parseInt(b.dataset.i, 10), 1);
-        saveState(); renderSubsList(); renderWater();
-      });
-    });
+    list.innerHTML = state.substances.map((s, i) => {
+      const attrs = ' data-i="' + i + '" data-id="' + escape(s.id || '') + '" data-name="' + escape(s.name || '') + '"';
+      return '<div class="sub-row"' + attrs + '>'
+        + '<div class="sub-row-info">'
+        +   '<div class="sub-row-name">' + escape(s.name) + '</div>'
+        +   '<div class="sub-row-meta">' + escape(subMeta(s)) + '</div>'
+        + '</div>'
+        + '<input type="number" inputmode="decimal" class="sub-dose-input"' + attrs + ' min="0" step="0.5" value="' + escape(s.dose != null ? s.dose : s.defaultDose) + '" aria-label="Dose of ' + escape(s.name) + ' in ' + escape(s.unit || 'units') + '">'
+        + '<button type="button" class="icon-btn sub-row-del"' + attrs + ' aria-label="Remove ' + escape(s.name) + '">' + ICON_X + '</button>'
+        + '</div>';
+    }).join('');
   }
+  function editDose(inp, v) {
+    const i = parseInt(inp.dataset.i, 10);
+    let sub = null;
+    mutate(s => {
+      const idx = findSubIndex(s, i, inp.dataset.id, inp.dataset.name);
+      if (idx < 0) return false;
+      sub = s.substances[idx];
+      if (sub.dose === v) return false;
+      sub.dose = v;
+    });
+    if (!sub) { renderSubsList(); return; }
+    const meta = inp.closest('.sub-row').querySelector('.sub-row-meta');
+    if (meta) meta.textContent = subMeta(sub);
+    renderWater();
+  }
+  $('subsList').addEventListener('input', (e) => {
+    const inp = e.target.closest('.sub-dose-input');
+    if (!inp) return;
+    const v = parseFloat(inp.value);
+    if (isFinite(v) && v >= 0) editDose(inp, v);
+  });
+  $('subsList').addEventListener('change', (e) => {
+    const inp = e.target.closest('.sub-dose-input');
+    if (!inp) return;
+    const v = parseFloat(inp.value);
+    if (isFinite(v) && v >= 0) return;
+    // Left empty: show the saved dose again
+    state = loadState();
+    const idx = findSubIndex(state, parseInt(inp.dataset.i, 10), inp.dataset.id, inp.dataset.name);
+    const sub = state.substances[idx];
+    if (sub) inp.value = sub.dose != null ? sub.dose : sub.defaultDose;
+  });
+  $('subsList').addEventListener('click', (e) => {
+    const b = e.target.closest('.sub-row-del');
+    if (!b) return;
+    mutate(s => {
+      const idx = findSubIndex(s, parseInt(b.dataset.i, 10), b.dataset.id, b.dataset.name);
+      if (idx < 0) return false;
+      s.substances.splice(idx, 1);
+    });
+    renderSubsList(); renderWater();
+    if ($('subResults').classList.contains('show')) renderResults();
+  });
 
-  // Substance search
-  $('subSearch').addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase();
+  // Substance search: results sit in the flow under the field (no dropdown covering the list)
+  function hideResults() { const r = $('subResults'); r.classList.remove('show'); r.innerHTML = ''; }
+  function renderResults() {
+    const q = $('subSearch').value.trim().toLowerCase();
     const results = $('subResults');
-    if (!q) { results.classList.remove('show'); results.innerHTML = ''; return; }
+    if (!q) { hideResults(); return; }
     const matches = SUBSTANCE_DB.filter(s =>
       s.name.toLowerCase().includes(q) || s.cat.toLowerCase().includes(q)
     ).slice(0, 8);
     if (!matches.length) {
-      results.innerHTML = '<div class="search-result"><span class="search-result-name">No matches</span><span class="search-result-meta">Try a different name or category</span></div>';
+      results.innerHTML = '<div class="search-result"><div class="search-result-body"><div class="search-result-name">No matches</div><div class="search-result-note">Try another name, or a category like diuretic</div></div></div>';
       results.classList.add('show');
       return;
     }
+    const added = new Set((state.substances || []).map(x => x && x.id));
     results.innerHTML = matches.map(s => {
+      const isAdded = added.has(s.id);
       const defaultExtra = (s.defaultDose || 0) * (s.mlPerUnit || 0);
-      return '<div class="search-result" data-id="' + s.id + '">'
-        + '<span class="search-result-name">' + escape(s.name) + ' <span class="search-result-add">+</span></span>'
-        + '<span class="search-result-meta">' + escape(s.cat) + ' · ' + s.defaultDose + ' ' + escape(s.unit) + ' default → adds ~' + fmtMl(defaultExtra) + '/day · ' + escape(s.note) + '</span>'
-        + '</div>';
+      return '<button type="button" class="search-result" data-id="' + s.id + '"' + (isAdded ? ' disabled' : '') + '>'
+        + '<div class="search-result-body">'
+        +   '<div class="search-result-name">' + escape(s.name) + '</div>'
+        +   '<div class="search-result-meta">' + escape(s.cat) + ' · ' + s.defaultDose + ' ' + escape(s.unit) + ' → +' + fmtMlExact(defaultExtra) + '/day</div>'
+        +   '<div class="search-result-note">' + escape(s.note) + '</div>'
+        + '</div>'
+        + (isAdded ? '<span class="row-tag row-tag--accent">Added</span>' : '<span class="search-result-add">' + ICON_PLUS + '</span>')
+        + '</button>';
     }).join('');
     results.classList.add('show');
-    results.querySelectorAll('.search-result').forEach(el => {
-      el.addEventListener('click', () => {
-        const id = el.dataset.id;
-        const sub = SUBSTANCE_DB.find(x => x.id === id);
-        if (!sub) return;
-        if ((state.substances || []).find(x => x.id === id)) { alert('Already added — edit the dose below.'); return; }
-        state.substances.push({
-          id: sub.id, name: sub.name, cat: sub.cat,
-          unit: sub.unit, mlPerUnit: sub.mlPerUnit,
-          defaultDose: sub.defaultDose,
-          dose: sub.defaultDose
-        });
-        saveState();
-        $('subSearch').value = '';
-        results.classList.remove('show');
-        renderSubsList(); renderWater();
+  }
+  $('subSearch').addEventListener('input', renderResults);
+  $('subSearch').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('subResults').classList.contains('show')) {
+      e.stopPropagation();
+      $('subSearch').value = '';
+      hideResults();
+    }
+  });
+  $('subResults').addEventListener('click', (e) => {
+    const el = e.target.closest('button.search-result');
+    if (!el || el.disabled) return;
+    const sub = SUBSTANCE_DB.find(x => x.id === el.dataset.id);
+    if (!sub) return;
+    mutate(s => {
+      if (s.substances.some(x => x && x.id === sub.id)) return false;
+      s.substances.push({
+        id: sub.id, name: sub.name, cat: sub.cat,
+        unit: sub.unit, mlPerUnit: sub.mlPerUnit,
+        defaultDose: sub.defaultDose,
+        dose: sub.defaultDose
       });
     });
+    $('subSearch').value = '';
+    hideResults();
+    renderSubsList(); renderWater();
   });
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('.search-wrap')) $('subResults').classList.remove('show');
+    if (!e.target.closest('.search-wrap') && !e.target.closest('#subResults')) hideResults();
   });
 
-  $('settingsBtn').addEventListener('click', () => {
+  // ----- Sheet open / close -----
+  // Standalone: a bottom sheet over the page. Inside Health: the iframe asks Health to make it
+  // full-screen for a moment ('row:water-sheet'), so the sheet slides over Health instead of
+  // opening inside the iframe's box. No answer within 400ms: open this page's own settings.
+  let sheetOpen = false, lastFocus = null, openedFromHash = false, settingsPending = false;
+  function openSettings() {
+    if (sheetOpen) return;
+    sheetOpen = true;
+    lastFocus = document.activeElement;
+    state = loadState();
     renderSettings();
-    $('setModalBg').classList.add('show');
+    // Next frame: the sheet slides up from its closed position (and, embedded, at the new iframe size)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!sheetOpen) return;
+      $('setModalBg').classList.add('show');
+      try { $('setTitle').focus({ preventScroll: true }); } catch (e) {}
+    }));
+  }
+  function closeSettings() {
+    if (!sheetOpen) return;
+    sheetOpen = false;
+    settingsPending = false;
+    const bg = $('setModalBg');
+    if (bg.contains(document.activeElement)) document.activeElement.blur();
+    bg.classList.remove('show');
+    $('subSearch').value = '';
+    hideResults();
+    // Embedded: always tell Health the sheet is gone, even if its 'ready' came too late to count
+    // (it may have made the iframe full-screen after the in-place fallback opened the sheet)
+    if (isEmbedded) setTimeout(endSheetHost, sheetMs());
+    if (openedFromHash) {
+      openedFromHash = false;
+      // Opened from Health's "Settings" link (po-water.html#settings): Done goes back there
+      if (history.length > 1) { setTimeout(() => history.back(), sheetMs()); return; }
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    }
+    if (lastFocus && lastFocus.focus && document.contains(lastFocus)) {
+      try { lastFocus.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
+  function sheetMs() {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--dur-slow');
+    const n = parseFloat(v);
+    return isFinite(n) ? n : 360;
+  }
+  function waitForParent(type, ms) {
+    return new Promise((resolve, reject) => {
+      function onMsg(e) {
+        if (e.source !== window.parent || !e.data || e.data.type !== type) return;
+        clearTimeout(timer); window.removeEventListener('message', onMsg); resolve();
+      }
+      const timer = setTimeout(() => { window.removeEventListener('message', onMsg); reject(); }, ms);
+      window.addEventListener('message', onMsg);
+    });
+  }
+  function endSheetHost() {
+    if (sheetOpen) return;
+    const root = document.documentElement;
+    try { window.parent.postMessage({ type: 'row:water-sheet', open: false }, '*'); } catch (e) {}
+    // Show the page again once Health has shrunk the iframe back (its resize), so it never
+    // flashes at full-screen size
+    let done = false;
+    const finish = () => {
+      if (done || sheetOpen) return;
+      done = true;
+      window.removeEventListener('resize', finish);
+      root.classList.remove('sheet-host');
+      postHeight(true);
+    };
+    window.addEventListener('resize', finish);
+    setTimeout(finish, 250);
+  }
+  $('settingsBtn').addEventListener('click', () => {
+    if (!isEmbedded) { openSettings(); return; }
+    const root = document.documentElement;
+    root.classList.add('sheet-host');
+    waitForParent('row:water-sheet-ready', 400).then(openSettings, () => {
+      root.classList.remove('sheet-host');
+      postHeight(true);
+      // Health can't host the sheet: open the standalone page's settings, or in place as a last resort
+      try { window.top.location.href = location.href.split('#')[0] + '#settings'; } catch (e) {}
+      setTimeout(() => { if (!document.hidden) openSettings(); }, 600);
+    });
+    try { window.parent.postMessage({ type: 'row:water-sheet', open: true }, '*'); } catch (e) {}
   });
-  $('setClose').addEventListener('click', () => $('setModalBg').classList.remove('show'));
+  $('setClose').addEventListener('click', closeSettings);
+  $('setModalBg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeSettings(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen) closeSettings(); });
 
   // Export / import / reset
   $('setExport').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'water-coach-data-' + new Date().toISOString().slice(0,10) + '.json';
-    a.click(); URL.revokeObjectURL(url);
+    const json = JSON.stringify(loadState(), null, 2);
+    const name = 'water-coach-data-' + todayKey() + '.json';
+    const download = () => {
+      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    };
+    // iOS app: the share sheet is the way to save a file (WKWebView ignores <a download>).
+    // A share that fails (not just one the user cancels) falls back to the download.
+    try {
+      const file = new File([json], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file] }).catch((err) => { if (!err || err.name !== 'AbortError') download(); });
+        return;
+      }
+    } catch (e) {}
+    download();
   });
   $('setImport').addEventListener('click', () => $('setImportFile').click());
   $('setImportFile').addEventListener('change', e => {
-    const f = e.target.files[0]; if (!f) return;
+    const f = e.target.files[0];
+    e.target.value = '';   // picking the same file again still fires 'change'
+    if (!f) return;
     const r = new FileReader();
     r.onload = () => {
-      try {
-        const parsed = JSON.parse(r.result);
-        if (!confirm('Replace ALL current data with the imported file?')) return;
-        state = normalize(parsed);
-        saveState(); renderSettings(); renderAll();
-      } catch (err) { alert('Import failed: ' + err.message); }
+      let parsed;
+      try { parsed = JSON.parse(r.result); } catch (err) { alert('Import failed: ' + err.message); return; }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+          !parsed.logs || typeof parsed.logs !== 'object' || Array.isArray(parsed.logs)) {
+        alert('That file is not a Water export.');
+        return;
+      }
+      if (!confirm('Replace ALL current water data with the imported file?')) return;
+      state = normalize(parsed);
+      saveState(); renderSettings(); renderAll();
     };
     r.readAsText(f);
   });
   $('setReset').addEventListener('click', () => {
     if (!confirm('Wipe ALL water logs and settings? This cannot be undone.')) return;
-    localStorage.removeItem(LS_KEY);
-    state = loadState();
-    $('setModalBg').classList.remove('show');
+    // Save the defaults rather than removing the key: a removal never reaches other
+    // devices through sync, which would then put the old data back.
+    state = normalize({});
+    saveState();
+    closeSettings();
     renderAll();
   });
 
@@ -1090,37 +1707,81 @@ html, body {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // ============================================================
+  // STAYING CURRENT
+  // po_water_v1 also changes from outside: the top-bar "+", Health, cloud sync, another tab,
+  // midnight. Re-read and re-render on every such signal. Settings fields re-render only
+  // when nothing in them is focused, so typing is never interrupted.
+  // ============================================================
+  function fieldFocused() {
+    const a = document.activeElement;
+    return !!(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName));
+  }
+  function resync() {
+    if (todayKey() !== shownDay) histSel = -1;
+    state = loadState();
+    renderAll();
+    if (sheetOpen) {
+      if (fieldFocused()) settingsPending = true;
+      else renderSettings();
+    }
+  }
+  document.addEventListener('focusout', () => {
+    if (!settingsPending) return;
+    setTimeout(() => {
+      if (settingsPending && !fieldFocused()) { settingsPending = false; if (sheetOpen) renderSettings(); }
+    }, 0);
+  });
+  // Real events from Health or another tab carry the key; sync.js's onApplied sends a key-less one
+  window.addEventListener('storage', (e) => {
+    if (selfEvent) return;
+    if (!e.key || e.key === LS_KEY) resync();
+  });
+  window.addEventListener('message', (e) => {
+    if (e.source === window.parent && e.data && e.data.type === 'row:water-refresh') resync();
+  });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) resync(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) resync(); });
+  // Every minute: the pace line moves with the clock, and a new day starts at midnight
+  setInterval(() => { if (todayKey() !== shownDay) resync(); else renderWater(); }, 60 * 1000);
+  // iOS WebKit only applies :active styles when a touchstart listener exists
+  document.addEventListener('touchstart', () => {}, { passive: true });
+
+  // Embedded: report the content height so Health sizes the iframe to fit (no scroll inside a scroll)
+  let lastHeight = 0;
+  function postHeight(force) {
+    if (!isEmbedded || document.documentElement.classList.contains('sheet-host')) return;
+    const h = Math.ceil(document.querySelector('.shell').getBoundingClientRect().height);
+    if (!h || (!force && h === lastHeight)) return;
+    lastHeight = h;
+    try { window.parent.postMessage({ type: 'row:water-height', height: h, h: h }, '*'); } catch (e) {}
+  }
+
   // BOOT
   renderAll();
+  if (isEmbedded) {
+    if (window.ResizeObserver) new ResizeObserver(() => postHeight()).observe(document.querySelector('.shell'));
+    window.addEventListener('load', () => postHeight(true));
+    postHeight(true);
+  } else if (location.hash === '#settings') {
+    openedFromHash = true;
+    openSettings();
+  }
 })();
 </script>
-<style>
-/* === iPhone bottom-safe-area fix ===
-   The Done button in the settings modal + the bottom of the page were
-   getting blocked by the iPhone home indicator. These rules add
-   safe-area padding so nothing sits under it. */
-.shell {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom));
-}
-.modal-bg {
-  padding-bottom: max(20px, env(safe-area-inset-bottom));
-  padding-top: max(20px, env(safe-area-inset-top));
-}
-.modal {
-  max-height: calc(88vh - env(safe-area-inset-bottom));
-}
-.water-plus-btn,
-.water-minus-btn {
-  margin-bottom: max(0px, env(safe-area-inset-bottom));
-}
-</style>
 <script>
+// Standalone only: inside Health the parent page syncs this row.
+// Same appKey and key set as health.html, so both pages agree on what the 'health' row holds
+// (sync.js merges only changed keys into the row; it never replaces it with a subset).
 document.addEventListener('DOMContentLoaded', function () {
   try { if (window.self !== window.top) return; } catch (e) { return; }
   if (typeof initCloudSync !== 'function') return;
   initCloudSync({
     appKey: 'health',
-    syncedKeys: ['po_water_v1'],
+    syncedKeys: ['stack:items', 'stack:version', 'stack:low', 'po_water_v1'],
+    syncedPrefixes: ['stack:taken:'],
+    // A key-less 'storage' event: this page re-reads po_water_v1 and re-renders
+    // (settings fields wait for blur), and topbar.js refreshes its water pill.
     onApplied: function () { window.dispatchEvent(new Event('storage')); }
   });
 });
