@@ -5,528 +5,717 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#050506">
 <meta name="color-scheme" content="dark">
-<title>Daily Stack — Customizable Template</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<title>Health</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="sync.js" defer></script>
 <script src="topbar.js" defer></script>
 <style>
+/* ===================== row-tokens v1 =====================
+   Paste as the FIRST rule of each page's first <style>, identical on every page.
+   Then the page overrides only the 4 --accent* lines (see per-page accents).
+   Contrast numbers are measured on --surface-1 over --bg (≈ #101011). */
 :root {
-  --bg: #050506;
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-secondary: rgba(255, 255, 255, 0.035);
-  --bg-input: rgba(0, 0, 0, 0.28);
-  --bg-input-focus: rgba(0, 0, 0, 0.36);
-  --bg-dropdown: rgba(15, 15, 18, 0.96);
+  color-scheme: dark;
 
-  --border: rgba(255, 255, 255, 0.06);
-  --border-soft: rgba(255, 255, 255, 0.04);
-  --border-strong: rgba(255, 255, 255, 0.12);
+  /* ---- Base canvas (flat: no radial washes, no grain, no drift) ---- */
+  --bg: #050506;                         /* page; also <meta name="theme-color"> on every page */
+  --bg-elevated: #141416;                /* OPAQUE: sheets, modals, menus, workout session, overlays */
+  --bg-chrome: rgba(8, 8, 9, 0.78);      /* top bar / tab bar / finance nav, always with --blur-material */
 
-  --text-primary: #FAFAFA;
-  --text-secondary: #B8B6B0;
-  --text-tertiary: #76746E;
-  --text-quaternary: #4D4B47;
+  /* ---- Surfaces: translucent white so they stack on any base (incl. inside the water iframe) ---- */
+  --surface-1: rgba(255, 255, 255, 0.045);   /* card                       ≈ #101011 */
+  --surface-2: rgba(255, 255, 255, 0.065);   /* row / field / tile in card ≈ #202020 */
+  --surface-3: rgba(255, 255, 255, 0.10);    /* tonal button, pressed row  ≈ #282829 */
+  --surface-active: rgba(255, 255, 255, 0.14); /* selected segment */
+  --surface-sunken: rgba(0, 0, 0, 0.28);     /* legacy recessed well (being phased out for --surface-2) */
+  --track: rgba(255, 255, 255, 0.08);        /* progress bar / ring track */
 
-  --accent: #1D9E75;
-  --accent-glow: rgba(29, 158, 117, 0.35);
-  --warning: #FF8A4D;
-  --warning-bg: rgba(163, 45, 45, 0.10);
-  --tag-stack: #D8AB30;
-  --tag-stack-bg: rgba(216, 171, 48, 0.15);
+  /* ---- Lines ---- */
+  --hairline: rgba(255, 255, 255, 0.06);       /* list separators, chrome edges */
+  --border: rgba(255, 255, 255, 0.08);         /* card/control edge where one is needed */
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --control-border: rgba(255, 255, 255, 0.36); /* unchecked checkbox ring: 3.3:1 (WCAG 1.4.11) */
+  --edge-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05); /* the "glass lip" on cards */
 
-  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* ---- Text (warm neutrals) ---- */
+  --text-1: #FAFAFA;   /* primary          16.9:1 */
+  --text-2: #B8B6B0;   /* secondary         9.4:1 */
+  --text-3: #94918A;   /* tertiary, placeholders: ≥5.0:1 on surface-2, 4.7:1 on surface-3. Lowest level for anything that carries information */
+  --text-4: #5E5C57;   /* 2.9:1 — disabled + purely decorative glyphs ONLY, never information */
+  --text-on-light: #0A0A0B; /* ink on porcelain / accent fills (16:1 on porcelain, ≥6.5:1 on every accent) */
+
+  /* ---- Porcelain: the one primary-button material, shared by every page ---- */
+  --porcelain: #F4F1EA;
+  --porcelain-fill: linear-gradient(180deg, #FFFFFF 0%, #ECE9E2 100%); /* subtle material sheen, buttons only */
+
+  /* ---- Semantic status (used only for status, never as decoration) ---- */
+  --positive: #6BE3A4;  --positive-tint: rgba(107, 227, 164, 0.14);  /* 11.9:1 */
+  --warning:  #F2C063;  --warning-tint:  rgba(242, 192, 99, 0.14);   /* 11.3:1 */
+  --negative: #FF6B6B;  --negative-tint: rgba(255, 107, 107, 0.14);  /* 6.9:1, 5.7:1 on its tint */
+
+  /* ---- Feature hues: each domain owns one; reused wherever that domain appears ---- */
+  --hue-day:     #E07658;  /* Main: Day Ring, goals: ember   6.3:1 (5.3:1 on its tint) */
+  --hue-health:  #7DD3FC;  /* Health stack + Water + top-bar water pill: sky  11.4:1 */
+  --hue-food:    #F4F1EA;  /* Food: kcal: porcelain  16.9:1 */
+  --hue-fitness: #6BE3A4;  /* Fitness: mint  11.9:1 */
+  --hue-finance: #B58CFF;  /* Finance: violet  7.4:1 (6.1:1 on its tint) */
+  --protein: #5CC8FF;  --carbs: #F2B04A;  --fat: #B58CFF;  /* macro DATA colours: bars/dots only */
+  --data-1: #7DD3FC; --data-2: #6BE3A4; --data-3: #F2C063; --data-4: #B58CFF; --data-5: #E07658; /* finance categories / donut */
+
+  /* ---- Page accent (each page overrides these four lines) ---- */
+  --accent: var(--hue-day);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(224, 118, 88, 0.14);
+  --accent-ring: rgba(224, 118, 88, 0.60);   /* focus outline + focused field border */
+
+  /* ---- Type ---- */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-micro: 11px;     /* eyebrows, tab labels, tags, axis labels (floor: nothing smaller) */
+  --fs-caption: 12px;   /* row meta, helper text, mono sub-lines */
+  --fs-footnote: 13px;  /* secondary text, segment/chip labels, field labels */
+  --fs-body: 15px;      /* body, list-row titles, buttons */
+  --fs-headline: 17px;  /* sheet titles, emphasized row values, large buttons */
+  --fs-title-3: 20px;   /* "/ 7" denominators next to a hero, card titles */
+  --fs-title-2: 22px;   /* secondary stat, food item name in sheet */
+  --fs-title-1: 28px;   /* page title (26px at ≤360px) */
+  --fs-display: 34px;   /* secondary hero (e.g. kcal on Main's food card, wishlist total) */
+  --fs-hero: 48px;      /* the ONE number per screen */
+  --fs-input: 16px;     /* every input/select/textarea: iOS will not zoom */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; /* 800 retired */
+  --lh-tight: 1.05; --lh-snug: 1.25; --lh-body: 1.45;
+  --tracking-hero: -0.035em; --tracking-title: -0.022em; --tracking-body: -0.005em;
+  --tracking-eyebrow: 0.08em;  /* was 0.14–0.22em in 9 variants */
+
+  /* ---- Space (4pt grid) ---- */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-7: 28px; --space-8: 32px; --space-10: 40px;
+  --gutter: 16px;        /* page side gutter (20px ≥481px) */
+  --card-pad: 16px;      /* (20px ≥481px) */
+  --card-gap: 12px;      /* between stacked cards */
+  --section-gap: 28px;   /* above a section label */
+  --page-max: 640px;
+  --tap: 44px;           /* minimum hit target */
+
+  /* ---- Radii (5 values; replaces 13 in gym alone) ---- */
+  --radius-xs: 6px;      /* tiny inner marks only */
+  --radius-sm: 8px;      /* tiles, tags-in-rows, chart corners */
+  --radius-md: 12px;     /* fields, segmented control, inset groups, toast, large checkbox */
+  --radius-lg: 18px;     /* cards, grouped lists */
+  --radius-xl: 26px;     /* bottom-sheet top corners */
+  --radius-pill: 999px;  /* buttons, chips, tags, bars */
+
+  /* ---- Elevation (no glows anywhere) ---- */
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 24px 64px rgba(0, 0, 0, 0.60);
+  --shadow-porcelain: inset 0 1px 0 rgba(255, 255, 255, 0.70), 0 1px 2px rgba(0, 0, 0, 0.40), 0 6px 16px rgba(0, 0, 0, 0.30);
+  --blur-material: saturate(1.6) blur(20px);  /* chrome, sheets' scrim-free bars, toasts only */
+
+  /* ---- Motion ---- */
+  --dur-instant: 100ms;   /* press scale */
+  --dur-fast: 160ms;      /* colour/background changes */
+  --dur-base: 240ms;      /* toggles, fades, check pop, ticker crossfade */
+  --dur-slow: 360ms;      /* sheets, overlays */
+  --dur-progress: 600ms;  /* bar/ring fills */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* checkmark pop only */
+
+  /* ---- Layout & layers ---- */
+  --topbar-h: 52px;  --tabbar-h: 56px;
+  --z-chrome: 40; --z-session: 80; --z-sheet: 100; --z-viewer: 200; --z-toast: 250; --z-camera: 300;
+
+  /* ================= Legacy aliases =================
+     So existing rules adopt the system without renaming. */
+  --text-primary: var(--text-1);  --text-secondary: var(--text-2);
+  --text-tertiary: var(--text-3); --text-quaternary: var(--text-4);
+  --success: var(--positive); --danger: var(--negative);
+  --good: var(--positive); --warn: var(--warning); --bad: var(--negative); --info: var(--hue-health);
+  --bg-deep: var(--bg);
+  --bg-card: #111113;  /* opaque on purpose: gym/po-water also paint MODALS with --bg-card; visually = surface-1 on --bg */
+  --bg-secondary: var(--surface-2); --bg-input: var(--surface-2); --bg-input-focus: var(--surface-2);
+  --bg-dropdown: var(--bg-elevated);
+  --card: var(--surface-1); --field: var(--surface-2); --hair: var(--border); --border-soft: var(--hairline);
+  --glass-bg: var(--surface-1); --glass-border: transparent; --glass-border-strong: transparent;
+  --glass-shadow: var(--shadow-card);
+  --kcal: var(--hue-food);
+  --warning-bg: var(--warning-tint); --tag-stack: var(--warning); --tag-stack-bg: var(--warning-tint);
+  --accent-glow: transparent;
+  /* finance --radius-sm (8) / --radius-md (12) map 1:1; finance --radius-lg 16 → 18 */
+}
+@media (min-width: 481px) { :root { --gutter: 20px; --card-pad: 20px; } }
+@media (max-width: 360px) { :root { --fs-title-1: 26px; --fs-hero: 44px; } }
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-instant: 0ms; --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; --dur-progress: 0ms; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+  }
+}
+/* ===================== /row-tokens v1 ===================== */
+
+/* Health accent: sky, shared with the embedded water tracker and the top-bar water pill */
+:root {
+  --accent: var(--hue-health);
+  --accent-ink: #0A0A0B;
+  --accent-tint: rgba(125, 211, 252, 0.14);
+  --accent-ring: rgba(125, 211, 252, 0.60);
 }
 
+/* ====== BASE ====== */
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0;
   background: var(--bg);
-  color: var(--text-secondary);
-  font-family: var(--font);
-  font-size: 15px; line-height: 1.5;
+  color: var(--text-2);
+  font: var(--fw-regular) var(--fs-body)/var(--lh-body) var(--font);
+  letter-spacing: var(--tracking-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
 }
-body { min-height: 100vh; position: relative; overflow-x: hidden; }
+body { min-height: 100vh; min-height: 100dvh; }
+[hidden] { display: none !important; }
+input, select, textarea { font-size: var(--fs-input); } /* 16px: iOS does not zoom on focus */
+:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+::selection { background: var(--accent-tint); color: var(--text-1); }
+a, button, input, select, textarea, label, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
 
-body::before {
-  content: ''; position: fixed; inset: 0;
-  background:
-    radial-gradient(60% 50% at 82% 14%, rgba(224, 118, 88, 0.16) 0%, transparent 60%),
-    radial-gradient(50% 40% at 18% 90%, rgba(180, 180, 200, 0.06) 0%, transparent 60%);
-  filter: blur(40px);
-  pointer-events: none; z-index: 0;
-  animation: drift 36s ease-in-out infinite alternate;
-}
-body::after {
-  content: ''; position: fixed; inset: 0;
-  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
-  background-size: 3px 3px;
-  pointer-events: none; z-index: 1;
-}
-@keyframes drift { 0% { transform: translate(0, 0); } 100% { transform: translate(-2%, 2%); } }
-
-main {
-  position: relative; z-index: 2;
-  max-width: 720px; margin: 0 auto;
-  padding: 56px 20px 80px;
-  padding-top: max(56px, env(safe-area-inset-top, 56px));
+/* Page container: topbar.js owns safe-area-top and the tab-bar reserve (body.has-bottombar) */
+.row-page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--space-3) calc(var(--gutter) + env(safe-area-inset-right)) var(--space-8) calc(var(--gutter) + env(safe-area-inset-left));
 }
 
-.section-title {
-  font-family: var(--font-mono);
-  font-size: 11px; font-weight: 600;
-  letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin: 0 4px 14px;
-  display: flex; align-items: center; gap: 12px;
+/* ====== PAGE HEADER ====== */
+.row-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); margin: var(--space-2) 0 var(--space-5); }
+.row-page-title {
+  margin: 0;
+  font: var(--fw-bold) var(--fs-title-1)/1.1 var(--font-display);
+  letter-spacing: var(--tracking-title);
+  color: var(--text-1);
 }
-.section-title::before { content: '≡'; font-size: 14px; opacity: 0.5; }
+.row-page-sub { margin-top: var(--space-1); font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font-mono); color: var(--text-3); }
 
-.water-embed { margin-top: 56px; }
-.water-iframe {
-  display: block;
-  width: 100%;
-  height: 880px;
-  border: 0;
-  background: transparent;
-  border-radius: 16px;
-  overflow: hidden;
-  color-scheme: dark;
+/* ====== SHARED PIECES (restyled to the Row system; row- prefix = shared look) ====== */
+.row-card {
+  position: relative;
+  margin: 0 0 var(--card-gap);
+  padding: var(--card-pad);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card);
 }
-@media (max-width: 480px) {
-  .water-embed { margin-top: 40px; }
-  .water-iframe { height: 780px; }
+.row-card--hero { padding: var(--space-5); }
+.row-eyebrow {
+  display: block; margin: 0 0 var(--space-2);
+  font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font);
+  letter-spacing: var(--tracking-eyebrow); text-transform: uppercase;
+  color: var(--text-3);
 }
-
-.stack-card {
-  background: var(--bg-card);
-  border-radius: 16px;
-  padding: 22px 22px 18px;
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
-}
-
-.stack-head { margin-bottom: 12px; }
-.sf-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px; font-weight: 600;
-  letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin-bottom: 6px;
-}
-.sf-title {
-  font-size: 24px; font-weight: 700;
-  letter-spacing: -0.022em;
-  color: var(--text-primary);
-  line-height: 1.15; margin-bottom: 2px;
-}
-.stack-progress-text {
-  font-family: var(--font-mono);
-  font-size: 12px; color: var(--text-tertiary);
+.row-stat-hero {
+  font: var(--fw-bold) var(--fs-hero)/var(--lh-tight) var(--font-display);
+  letter-spacing: var(--tracking-hero);
   font-variant-numeric: tabular-nums;
-  margin-top: 6px;
+  color: var(--text-1);
 }
-.stack-progress-track {
-  height: 5px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 999px; overflow: hidden;
-  margin: 14px 0 18px;
+.row-stat-hero .of {
+  margin-left: 4px;
+  font: var(--fw-medium) var(--fs-title-3)/1 var(--font-mono);
+  letter-spacing: 0; color: var(--text-3);
 }
-.stack-progress-fill {
-  height: 100%; width: 0%;
-  background: #FFFFFF; border-radius: 999px;
-  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-.stack-window { margin-bottom: 14px; }
-.stack-window-header {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 8px; padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-soft);
-}
-.stack-window-icon { font-size: 16px; }
-.stack-window-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
-.stack-window-time { font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
-
-.stack-item {
-  display: grid;
-  grid-template-columns: 32px 1fr auto auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--bg-secondary);
-  margin-bottom: 6px;
-  border: 1px solid transparent;
-  transition: background 0.2s, border-color 0.2s;
-}
-.stack-item:hover { background: rgba(255,255,255,0.05); }
-.stack-item.taken { background: rgba(29,158,117,0.08); }
-.stack-item.taken .stack-item-name { text-decoration: line-through; color: var(--text-tertiary); }
-
-@keyframes pulse-red {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  50%      { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-}
-.stack-item.missed {
-  border: 1px solid rgba(239, 68, 68, 0.45);
-  animation: pulse-red 1.5s ease-in-out infinite;
-}
-.stack-item.missed .stack-check { border-color: rgba(239, 68, 68, 0.55); }
-.stack-item.taken.missed { animation: none; border-color: transparent; }
-.stack-item.taken.missed .stack-check { border-color: var(--accent); }
-
-.stack-check {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  background: var(--bg-card);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; color: transparent;
-  transition: all 0.2s;
-  flex-shrink: 0; font-family: inherit; padding: 0;
-}
-.stack-check:hover { border-color: var(--accent); }
-.stack-check.checked {
-  background: var(--accent); border-color: var(--accent);
-  color: white;
-  box-shadow: 0 0 12px var(--accent-glow);
+.row-bar { height: 6px; border-radius: var(--radius-pill); background: var(--track); overflow: hidden; }
+.row-bar > i {
+  display: block; height: 100%; width: 0;
+  border-radius: inherit; background: var(--accent);
+  transition: width var(--dur-progress) var(--ease-out);
 }
 
-.stack-item-body { min-width: 0; }
-.stack-item-name {
-  font-size: 14px; font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.2;
+.row-section-label {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  min-height: 20px;
+  margin: var(--section-gap) var(--space-1) var(--space-2);
+  font: var(--fw-semibold) var(--fs-micro)/1.2 var(--font);
+  letter-spacing: var(--tracking-eyebrow); text-transform: uppercase;
+  color: var(--text-3);
+}
+.row-section-label .meta {
+  font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0; text-transform: none; color: var(--text-3);
+}
+.row-section-label > span:first-child { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0 var(--space-2); }
+.row-section-label .meta.is-complete { color: var(--accent); }
+.row-section-action {
   display: inline-flex; align-items: center;
-  gap: 8px; flex-wrap: wrap;
-  outline: none;
+  min-height: var(--tap);
+  margin: -12px calc(-1 * var(--space-2)) -12px 0;
+  padding: 0 var(--space-2);
+  border: 0; border-radius: var(--radius-sm); background: none;
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-footnote)/1 var(--font);
+  letter-spacing: 0; text-transform: none; text-decoration: none;
+  white-space: nowrap; cursor: pointer;
+  transition: opacity var(--dur-fast);
 }
-.stack-item-name[contenteditable="true"] {
-  outline: 1px solid rgba(255,255,255,0.25);
-  outline-offset: 4px; border-radius: 4px;
-}
-.stack-item-meta {
-  font-size: 11px; color: var(--text-tertiary);
-  margin-top: 2px; outline: none; cursor: text;
-}
-.stack-item-meta[contenteditable="true"] {
-  outline: 1px solid rgba(255,255,255,0.2);
-  outline-offset: 4px; border-radius: 4px;
-  color: var(--text-secondary);
-}
-.stack-item-meta:empty::before {
-  content: 'add notes…';
-  color: var(--text-quaternary);
-  font-style: italic;
-}
+.row-section-action:active { opacity: 0.6; }
 
-.stack-item-tag {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 2px 7px; border-radius: 99px;
-  font-weight: 600; letter-spacing: 0.04em;
-  text-transform: lowercase;
-}
-.stack-item-tag.tag-stack { background: var(--tag-stack-bg); color: var(--tag-stack); }
-.stack-item-tag.tag-not-ordered { background: var(--warning-bg); color: var(--text-tertiary); }
-
-.stack-low-btn {
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text-tertiary);
-  font-size: 10px;
-  padding: 5px 9px; border-radius: 6px;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-weight: 600; letter-spacing: 0.04em;
-  white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 4px;
-  transition: all 0.15s;
-}
-.stack-low-btn:hover { border-color: rgba(163,45,45,0.4); color: var(--warning); }
-.stack-low-btn.is-low {
-  background: var(--warning-bg);
-  border-color: rgba(163,45,45,0.4);
-  color: var(--warning);
-}
-
-.stack-item-del {
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: 16px;
-  padding: 4px 10px; border-radius: 6px;
-  opacity: 0.7;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
-  font-family: inherit;
-  line-height: 1;
-  min-width: 28px; min-height: 28px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.stack-item:hover .stack-item-del { opacity: 1; }
-.stack-item-del:hover, .stack-item-del:active {
-  color: #FF6B6B;
-  border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(239, 68, 68, 0.08);
-  opacity: 1;
-}
-
-.stack-window-empty {
-  font-size: 12px;
-  color: var(--text-quaternary);
-  font-style: italic;
-  padding: 8px 12px;
-}
-
-/* ====== TICKER — cycles missed + running low every 5s ====== */
-.stack-ticker {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  margin-bottom: 14px;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 10px;
-  font-size: 12px;
-  min-height: 36px;
-}
-.stack-ticker-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #6BE3A4;
-  flex-shrink: 0;
-  transition: background 0.3s;
-}
-.stack-ticker.status-low .stack-ticker-dot { background: #FF8A4D; }
-.stack-ticker.status-missed .stack-ticker-dot {
-  background: #FF6B6B;
-  animation: ticker-pulse 1.5s ease-in-out infinite;
-}
-@keyframes ticker-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
-  50%      { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
-}
-.stack-ticker-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-.stack-ticker-sep { color: var(--text-quaternary); flex-shrink: 0; }
-.stack-ticker-msg {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
+.row-list {
+  margin: 0 0 var(--card-gap);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
-  text-overflow: ellipsis;
-  transition: opacity 0.28s;
+}
+.row-tile {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text-2);
+}
+.row-tile svg { width: 18px; height: 18px; }
+
+.row-tag {
+  display: inline-flex; align-items: center;
+  height: 22px; padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2); color: var(--text-2);
+  font: var(--fw-semibold) var(--fs-micro)/1 var(--font);
+  letter-spacing: 0.01em; text-transform: none; white-space: nowrap;
+}
+.row-tag--accent { background: var(--accent-tint); color: var(--accent); }
+.row-tag--warning { background: var(--warning-tint); color: var(--warning); }
+.row-tag--negative { background: var(--negative-tint); color: var(--negative); }
+
+.row-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--tap); padding: 0 var(--space-5);
+  border: 0; border-radius: var(--radius-pill);
+  font: var(--fw-semibold) var(--fs-body)/1 var(--font);
+  letter-spacing: 0; white-space: nowrap; cursor: pointer;
+  transition: transform var(--dur-instant) var(--ease-out), background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast);
+}
+.row-btn:active { transform: scale(0.97); }
+.row-btn:disabled { opacity: 0.4; pointer-events: none; }
+.row-btn--primary {
+  background: var(--porcelain-fill); color: var(--text-on-light);
+  font-weight: var(--fw-bold); box-shadow: var(--shadow-porcelain);
+}
+.row-btn--secondary { background: var(--surface-3); color: var(--text-1); }
+.row-btn--danger { background: var(--negative-tint); color: var(--negative); }
+.row-btn--block { width: 100%; }
+.row-btn--lg { min-height: 52px; padding: 0 var(--space-6); font-size: var(--fs-headline); }
+
+.row-icon-btn {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: var(--tap); height: var(--tap); padding: 0;
+  border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--text-3);
+  cursor: pointer;
+  transition: background-color var(--dur-fast), transform var(--dur-instant) var(--ease-out);
+}
+.row-icon-btn:active { transform: scale(0.94); background: var(--surface-3); }
+.row-icon-btn svg { width: 20px; height: 20px; }
+
+.row-field {
+  width: 100%; min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  background: var(--surface-2); color: var(--text-1);
+  font: var(--fw-regular) var(--fs-input)/1.25 var(--font);
+  caret-color: var(--accent);
+  outline: none;
+  -webkit-appearance: none; appearance: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.row-field::placeholder { color: var(--text-3); }
+.row-field:focus { border-color: var(--accent-ring); }
+.row-field:focus-visible { outline: none; }
+select.row-field {
+  padding-right: 36px; cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%2394918A' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+select.row-field option { background: var(--bg-elevated); color: var(--text-1); }
+.row-field-label { display: block; margin: 0 0 6px 2px; font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font); color: var(--text-2); }
+.row-composer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
+
+.row-empty { padding: var(--space-7) var(--space-5); text-align: center; }
+.row-empty-title { font: var(--fw-semibold) var(--fs-body)/1.3 var(--font); color: var(--text-1); }
+.row-empty-body {
+  max-width: 32ch; margin: var(--space-1) auto 0;
+  font: var(--fw-regular) var(--fs-footnote)/var(--lh-body) var(--font);
+  color: var(--text-3);
+}
+.row-empty .row-btn { margin-top: var(--space-4); }
+
+/* ====== STACK HERO — the screen's one number ====== */
+.stack-hero .row-bar { margin-top: var(--space-4); }
+.stack-next {
+  margin: var(--space-3) 0 0;
+  font: var(--fw-medium) var(--fs-footnote)/1.35 var(--font);
+  color: var(--text-2);
+}
+.stack-next b { font-weight: var(--fw-semibold); color: var(--text-1); }
+
+/* ====== TICKER — cycles missed + running low every 5s; tap jumps to the row ====== */
+.stack-ticker {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: var(--tap);
+  margin-top: var(--space-4); padding: 0 14px;
+  border: 0; border-radius: var(--radius-md);
+  background: var(--surface-2); color: var(--text-1);
+  font: var(--fw-medium) var(--fs-footnote)/1.2 var(--font);
+  text-align: left; cursor: pointer;
+  transition: background-color var(--dur-fast);
+}
+.stack-ticker:active { background: var(--surface-3); }
+.stack-ticker-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--accent); }
+.stack-ticker.is-missed .stack-ticker-dot { background: var(--negative); }
+.stack-ticker.is-low .stack-ticker-dot { background: var(--warning); }
+.stack-ticker-msg {
+  flex: 1; min-width: 0;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  transition: opacity var(--dur-base) var(--ease-out);
 }
 .stack-ticker-msg.is-fading { opacity: 0; }
 .stack-ticker-count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+  font: var(--fw-medium) var(--fs-caption)/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
 }
 
-.stack-add-wrap {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-soft);
+/* ====== SUPPLEMENT ROW — whole row toggles taken; "…" opens the edit sheet ====== */
+.stack-item {
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-1);
+  padding: 0 var(--space-1) 0 0;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
-.stack-add-label { margin-bottom: 10px; }
+.stack-item + .stack-item::before {
+  content: ''; position: absolute; top: 0; right: 0; left: 52px;
+  height: 1px; background: var(--hairline);
+}
+.stack-item-hit {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: var(--space-3);
+  min-height: 56px;
+  padding: 10px 0 10px var(--space-4);
+  border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+/* Pressed and flashed states light the whole row, "…" included, so there is no half-lit edge */
+.stack-item-hit:active, .stack-item.is-flash { background: var(--surface-2); }
+@supports selector(:has(*)) {
+  .stack-item-hit:active { background: none; }
+  .stack-item:has(> .stack-item-hit:active) { background: var(--surface-2); }
+}
+.stack-item-hit:focus-visible { outline-offset: -2px; }
+.stack-check {
+  position: relative; flex-shrink: 0;
+  width: 24px; height: 24px;
+  border: 1.5px solid var(--control-border); border-radius: 50%;
+  background: transparent;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
+}
+.stack-check.checked { background: var(--accent); border-color: var(--accent); }
+.stack-check.checked::after {
+  content: ''; position: absolute; left: 7px; top: 3px;
+  width: 6px; height: 11px;
+  border: solid var(--accent-ink); border-width: 0 2.2px 2.2px 0;
+  transform: rotate(45deg);
+}
+/* Pop only on the row just tapped, not on every 60s re-render */
+.stack-item.just-toggled .stack-check.checked::after { animation: check-pop var(--dur-base) var(--ease-spring); }
+@keyframes check-pop { from { transform: rotate(45deg) scale(0); } to { transform: rotate(45deg) scale(1); } }
+.stack-item-body { flex: 1; min-width: 0; }
+.stack-item-name {
+  display: block;
+  font: var(--fw-semibold) var(--fs-body)/1.3 var(--font);
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.stack-item-name .row-tag { margin-left: 6px; vertical-align: 1px; height: 20px; }
+.stack-item-meta {
+  display: block; margin-top: 2px;
+  font: var(--fw-regular) var(--fs-caption)/1.3 var(--font);
+  color: var(--text-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stack-item.is-done .stack-item-name {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.30);
+}
+.stack-item.is-missed .stack-item-meta { color: var(--negative); }
+
+/* Add row closes the stack list */
+.stack-add { margin-top: var(--space-5); }
 .stack-add-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 110px 90px;
-  gap: 6px;
-  align-items: center;
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: 56px;
+  padding: 10px var(--space-4) 10px 12px;
+  border: 0; background: transparent;
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-body)/1.3 var(--font);
+  text-align: left; cursor: pointer;
+  transition: background-color var(--dur-fast);
 }
-.stack-input {
-  font-size: 13px;
-  padding: 9px 11px;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-family: inherit;
-  transition: border-color 0.18s, background 0.18s;
+.stack-add-row:active { background: var(--surface-2); }
+.stack-add-row .row-tile { background: var(--accent-tint); color: var(--accent); }
+
+/* ====== ADD / EDIT SHEET ====== */
+/* .modal-bg keeps topbar.js's body scroll lock; the panel is .row-sheet (not .modal),
+   and the overlay is display:block so the old ≤480px full-screen .modal override can't reach it. */
+.modal-bg.row-sheet-bg {
+  position: fixed; inset: 0; z-index: var(--z-sheet);
+  display: block; padding: 0;
+  background: rgba(0, 0, 0, 0);
+  visibility: hidden; pointer-events: none;
+  overscroll-behavior: contain;
+  transition: background-color var(--dur-base) var(--ease-out), visibility 0s linear var(--dur-slow);
 }
-.stack-input::placeholder { color: var(--text-tertiary); }
-.stack-input:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.40);
-  background: var(--bg-input-focus);
+.modal-bg.row-sheet-bg.show {
+  background: rgba(0, 0, 0, 0.55);
+  visibility: visible; pointer-events: auto;
+  transition: background-color var(--dur-base) var(--ease-out), visibility 0s;
 }
-.stack-select { cursor: pointer; }
-.stack-add-btn {
-  font-size: 13px;
-  padding: 9px 11px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%);
-  color: #0A0A0B;
-  font-weight: 700;
-  letter-spacing: 0.005em;
+.row-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 560px; margin: 0 auto;
+  max-height: calc(100vh - 52px);
+  max-height: calc(100dvh - max(44px, env(safe-area-inset-top)) - 8px);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-raised);
+  transform: translateY(100%);
+  transition: transform var(--dur-slow) var(--ease-sheet);
+}
+.row-sheet-bg.show .row-sheet { transform: none; }
+.row-sheet-grab { width: 36px; height: 5px; margin: 6px auto 0; border-radius: 3px; background: rgba(255, 255, 255, 0.22); }
+.row-sheet-head {
+  display: grid; grid-template-columns: 64px 1fr 64px; align-items: center;
+  min-height: 52px; padding: 0 var(--space-2);
+}
+.row-sheet-head h2 {
+  margin: 0; text-align: center;
+  font: var(--fw-semibold) var(--fs-headline)/1.2 var(--font);
+  color: var(--text-1);
+}
+.row-sheet-head h2:focus { outline: none; }
+.row-sheet-close {
+  color: var(--text-2);
+  background: radial-gradient(circle, var(--surface-3) 0 15px, transparent 15.5px);
+}
+.row-sheet-close svg { width: 16px; height: 16px; stroke-width: 2.2; }
+.row-sheet-done {
+  justify-self: end;
+  min-height: var(--tap); padding: 0 var(--space-3);
+  border: 0; background: none;
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-headline)/1 var(--font);
   cursor: pointer;
-  font-family: inherit;
-  transition: transform 0.12s, box-shadow 0.18s, background 0.18s;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 4px 14px rgba(0, 0, 0, 0.30);
 }
-.stack-add-btn:hover {
-  background: linear-gradient(180deg, #FFFFFF 0%, #F2F0EA 100%);
-  transform: translateY(-1px);
+.row-sheet-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-4);
+  padding: var(--space-1) var(--gutter) var(--space-5);
+  -webkit-overflow-scrolling: touch;
 }
-.stack-add-btn:active { transform: translateY(0) scale(0.97); }
-
-/* ====== SEARCH AUTOCOMPLETE — appears below the form when typing in Name ====== */
-.stack-name-wrap { position: relative; }
-
-.stack-search-results {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  width: max(100%, 320px);
-  background: var(--bg-dropdown);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  max-height: 280px;
-  overflow-y: auto;
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
-  z-index: 50;
-  padding: 6px;
+.row-sheet.is-edit .row-sheet-body { padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom)); }
+.row-sheet-foot {
+  padding: var(--space-3) var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline);
 }
-.stack-search-results[hidden] { display: none; }
+/* "When" gets the wider column so "Morning · 7–10 AM" fits at 360px */
+.stack-dose-when { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.stack-edit-actions { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
 
+/* Autocomplete results: in-flow under the Name field */
+.stack-results {
+  margin-top: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  overflow: hidden;
+}
 .stack-result {
-  display: flex;
-  gap: 12px; align-items: center;
-  width: 100%;
-  padding: 9px 11px;
-  background: transparent; border: none;
-  border-radius: 8px;
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: 56px;
+  padding: 10px var(--space-3);
+  border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+  transition: background-color var(--dur-fast);
+}
+.stack-result + .stack-result::before {
+  content: ''; position: absolute; top: 0; right: 0; left: 56px;
+  height: 1px; background: var(--hairline);
+}
+.stack-result:active { background: var(--surface-2); }
+.stack-result:focus-visible { outline-offset: -2px; }
+.stack-result-body { flex: 1; min-width: 0; }
+.stack-result-name { display: block; font: var(--fw-semibold) var(--fs-body)/1.3 var(--font); color: var(--text-1); }
+.stack-result-meta { display: block; margin-top: 2px; font: var(--fw-regular) var(--fs-caption)/1.35 var(--font); color: var(--text-3); }
+
+/* ====== TOAST (one at a time, 4s, optional Undo) ====== */
+.row-toast {
+  position: fixed; left: 50%;
+  bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom));
+  z-index: var(--z-toast);
+  display: flex; align-items: center; gap: var(--space-4);
+  width: max-content; min-height: 48px;
+  max-width: calc(100vw - 2 * var(--gutter));
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border); border-radius: 14px;
+  background: rgba(38, 38, 42, 0.92);
+  -webkit-backdrop-filter: var(--blur-material); backdrop-filter: var(--blur-material);
+  box-shadow: var(--shadow-raised);
+  color: var(--text-1);
+  font: var(--fw-medium) var(--fs-footnote)/1.3 var(--font);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out), visibility 0s linear var(--dur-base);
+}
+.row-toast.in {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transform: translate(-50%, 0);
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-fast) var(--ease-out), visibility 0s;
+}
+.row-toast.has-action { padding-right: var(--space-1); }
+.row-toast-msg { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.row-toast button {
+  flex-shrink: 0;
+  min-height: var(--tap); padding: 0 var(--space-3);
+  border: 0; background: none;
+  color: var(--accent);
+  font: var(--fw-semibold) var(--fs-footnote)/1 var(--font);
   cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  color: var(--text-secondary);
-  transition: background 0.12s;
-}
-.stack-result:hover, .stack-result.is-focused { background: rgba(255, 255, 255, 0.06); }
-
-.stack-result-icon { font-size: 17px; flex-shrink: 0; width: 24px; text-align: center; }
-.stack-result-body { min-width: 0; flex: 1; }
-.stack-result-name {
-  font-size: 13px; font-weight: 600;
-  color: var(--text-primary); line-height: 1.2;
-}
-.stack-result-meta {
-  font-size: 11px; color: var(--text-tertiary);
-  margin-top: 2px;
 }
 
-.attribution {
-  text-align: center; margin-top: 28px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-quaternary);
+/* ====== WATER (embedded po-water.html) ====== */
+.water-embed {
+  margin-top: var(--space-10);
+  /* #water is the top-bar pill's target: land the label below the sticky bar */
+  scroll-margin-top: calc(var(--topbar-h) + env(safe-area-inset-top) + var(--space-4));
 }
-
-@media (max-width: 600px) {
-  main { padding: 40px 16px 60px; }
-  .stack-card { padding: 18px 16px 14px; }
-  .stack-item { grid-template-columns: 28px 1fr auto; gap: 8px; }
-  .stack-item .stack-low-btn { grid-column: 2 / 4; margin-top: 4px; justify-self: start; }
-  .stack-add-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .stack-input { min-width: 0; }
-  .stack-add-row .stack-add-btn { grid-column: 1 / -1; }
-  .stack-add-row .stack-select { grid-column: 1 / -1; }
-  .stack-search-results { width: 100%; }
+.water-embed .row-section-label { margin-top: 0; }
+.water-frame { position: relative; }
+.water-iframe {
+  display: block;
+  width: 100%;
+  height: 940px; /* no-clip fallback until po-water posts its height */
+  border: 0;
+  background: transparent;
+  color-scheme: dark;
 }
-
-::selection { background: rgba(224, 118, 88, 0.3); color: var(--text-primary); }
-::-webkit-scrollbar { width: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
-/* iOS Safari zooms the page when focusing an input under 16px */
-@media (max-width: 768px) {
-  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea { font-size: 16px !important; }
+/* po-water's settings sheet: the iframe briefly covers the viewport so the sheet slides over Health */
+.water-iframe.is-sheet {
+  position: fixed; inset: 0; z-index: var(--z-sheet);
+  width: 100%; height: 100vh !important; height: 100dvh !important;
 }
+body.water-sheet-open { overflow: hidden; }
 </style>
 </head>
 <body>
 
-<main>
-  <div class="section-title">Daily Stack</div>
-
-  <div class="stack-card">
-    <div class="stack-ticker" id="stackTicker">
-      <span class="stack-ticker-dot"></span>
-      <span class="stack-ticker-label">STACK</span>
-      <span class="stack-ticker-sep">·</span>
-      <span class="stack-ticker-msg" id="stackTickerMsg">All caught up — keep it rolling</span>
-      <span class="stack-ticker-count" id="stackTickerCount">0/0</span>
+<main class="row-page" id="healthMain">
+  <header class="row-page-head">
+    <div>
+      <h1 class="row-page-title">Health</h1>
+      <div class="row-page-sub" id="healthSub">&nbsp;</div>
     </div>
+  </header>
 
-    <div class="stack-head">
-      <div class="sf-eyebrow">Daily stack</div>
-      <div class="sf-title">Tap each as you take it</div>
-      <div class="stack-progress-text" id="stackProgressText">— / — taken today · resets at 6:30 AM</div>
-    </div>
-
-    <div class="stack-progress-track">
-      <div id="stackProgressBar" class="stack-progress-fill"></div>
-    </div>
+  <div id="stackSection">
+    <section class="row-card row-card--hero stack-hero" id="stackHero" aria-labelledby="stackHeroLabel">
+      <span class="row-eyebrow" id="stackHeroLabel">Taken today</span>
+      <div class="row-stat-hero"><span id="stackTakenNum">0</span><span class="of" id="stackTotalNum">/ 0</span></div>
+      <div class="row-bar" id="stackBar" role="progressbar" aria-labelledby="stackHeroLabel" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><i id="stackProgressBar"></i></div>
+      <p class="stack-next" id="stackNext"></p>
+      <button type="button" class="stack-ticker" id="stackTicker" hidden>
+        <span class="stack-ticker-dot" aria-hidden="true"></span>
+        <span class="stack-ticker-msg" id="stackTickerMsg"></span>
+        <span class="stack-ticker-count" id="stackTickerCount"></span>
+      </button>
+    </section>
 
     <div id="stackGroups"></div>
 
-    <div class="stack-add-wrap">
-      <div class="sf-eyebrow stack-add-label">Add to stack</div>
-      <div class="stack-add-row">
-        <div class="stack-name-wrap">
-          <input id="stackAddName" type="text" placeholder="Name (e.g. B-complex)" class="stack-input" autocomplete="off" spellcheck="false" />
-          <div id="stackSearchResults" class="stack-search-results" hidden></div>
-        </div>
-        <input id="stackAddDose" type="text" placeholder="Dose (e.g. 1 cap)" class="stack-input" />
-        <select id="stackAddWindow" class="stack-input stack-select">
-          <option value="morning">Morning</option>
-          <option value="lunch">Lunch</option>
-          <option value="evening">Evening</option>
-          <option value="anytime">Anytime</option>
-        </select>
-        <button id="stackAddBtn" class="stack-add-btn">+ Add</button>
-      </div>
+    <div class="row-list stack-add" id="stackAdd">
+      <button type="button" class="stack-add-row" data-action="add">
+        <span class="row-tile" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+        <span>Add supplement</span>
+      </button>
     </div>
   </div>
 
-  <section id="water" class="water-embed">
-    <div class="section-title">Water Tracker</div>
-    <iframe src="po-water.html" class="water-iframe" loading="lazy" title="Water Tracker"></iframe>
+  <section id="water" class="water-embed" aria-labelledby="waterLabel">
+    <div class="row-section-label"><span id="waterLabel">Water</span><a class="row-section-action" href="po-water.html#settings">Settings</a></div>
+    <div class="water-frame" id="waterFrame">
+      <iframe src="po-water.html" class="water-iframe" loading="lazy" title="Water"></iframe>
+    </div>
   </section>
-
-  <div class="attribution">// editable template · all data stays in your browser</div>
 </main>
+
+<!-- Add / edit supplement: one bottom sheet -->
+<div class="modal-bg row-sheet-bg" id="stackSheetBg">
+  <div class="row-sheet" id="stackSheet" role="dialog" aria-modal="true" aria-labelledby="stackSheetTitle">
+    <div class="row-sheet-grab" aria-hidden="true"></div>
+    <div class="row-sheet-head">
+      <button type="button" class="row-icon-btn row-sheet-close" id="stackSheetClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h2 id="stackSheetTitle" tabindex="-1">Add supplement</h2>
+      <button type="button" class="row-sheet-done" id="stackSheetDone" hidden>Done</button>
+    </div>
+    <div class="row-sheet-body">
+      <div class="stack-name-wrap">
+        <label class="row-field-label" for="stackAddName">Name</label>
+        <input id="stackAddName" class="row-field" type="text" placeholder="Search or type a name" autocomplete="off" spellcheck="false" enterkeyhint="done">
+        <div id="stackSearchResults" class="stack-results" hidden></div>
+      </div>
+      <div class="row-composer-grid stack-dose-when">
+        <div>
+          <label class="row-field-label" for="stackAddDose">Dose</label>
+          <input id="stackAddDose" class="row-field" type="text" placeholder="e.g. 1 cap" autocomplete="off" enterkeyhint="done">
+        </div>
+        <div>
+          <label class="row-field-label" for="stackAddWindow">When</label>
+          <select id="stackAddWindow" class="row-field">
+            <option value="morning">Morning · 7–10 AM</option>
+            <option value="lunch">Lunch · 12–2 PM</option>
+            <option value="evening">Evening · 9–11 PM</option>
+            <option value="anytime">Anytime</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="row-field-label" for="stackAddNote">Notes</label>
+        <input id="stackAddNote" class="row-field" type="text" placeholder="Optional, e.g. with food" autocomplete="off" enterkeyhint="done">
+      </div>
+      <div class="stack-edit-actions" id="stackEditActions" hidden>
+        <button type="button" class="row-btn row-btn--secondary row-btn--block" id="stackLowToggle" aria-pressed="false">Mark as running low</button>
+        <button type="button" class="row-btn row-btn--danger row-btn--block" id="stackDelete">Delete from stack</button>
+      </div>
+    </div>
+    <div class="row-sheet-foot" id="stackAddFoot">
+      <button type="button" class="row-btn row-btn--primary row-btn--lg row-btn--block" id="stackAddBtn">Add to stack</button>
+    </div>
+  </div>
+</div>
+
+<div class="row-toast" id="stackToast" role="status" aria-live="polite">
+  <span class="row-toast-msg" id="stackToastMsg"></span>
+  <button type="button" id="stackToastUndo" hidden>Undo</button>
+</div>
 
 <script>
 (() => {
@@ -544,25 +733,41 @@ main {
     return `${y}-${m}-${d}`;
   }
 
+  // Hours since midnight on the active day: before the 6:30 rollover it is still
+  // "yesterday", so 01:00 counts as 25 and last night's windows stay missed.
+  function activeHour() {
+    const now = new Date();
+    const h = now.getHours() + (now.getMinutes() / 60);
+    return h < 6.5 ? h + 24 : h;
+  }
+  function activeDateLabel() {
+    const [y, m, d] = getActiveDate().split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  // Never bump: older builds replace stack:items whenever stack:version differs.
   const TEMPLATE_VERSION = 5;
 
-  const STACK_DEFAULTS = [
-    { id: 'm1', name: 'XXXXX - Supplement of choice', dose: '', window: 'morning', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'm2', name: 'XXXXX - Supplement of choice', dose: '', window: 'morning', note: 'how much MG, meal times, any data below', tag: 'stack', ordered: true  },
-    { id: 'm3', name: 'XXXXX - Supplement of choice', dose: '', window: 'morning', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'l1', name: 'XXXXX - Supplement of choice', dose: '', window: 'lunch',   note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'l2', name: 'XXXXX - Supplement of choice', dose: '', window: 'lunch',   note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'e1', name: 'XXXXX - Supplement of choice', dose: '', window: 'evening', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-    { id: 'e2', name: 'XXXXX - Supplement of choice', dose: '', window: 'evening', note: 'how much MG, meal times, any data below', tag: 'not-ordered', ordered: false },
-    { id: 'e3', name: 'XXXXX - Supplement of choice', dose: '', window: 'evening', note: 'how much MG, meal times, any data below', tag: null,    ordered: true  },
-  ];
+  // Fresh installs start empty (the "XXXXX - Supplement of choice" placeholders are gone).
+  const STACK_DEFAULTS = [];
 
   const STACK_WINDOWS = [
-    { key: 'morning', icon: '🌅', title: 'Morning', time: '7–10 AM', cutoffHour: 10 },
-    { key: 'lunch',   icon: '🍽️', title: 'Lunch',   time: '12–2 PM', cutoffHour: 14 },
-    { key: 'evening', icon: '🌙', title: 'Evening', time: '9–11 PM', cutoffHour: 23 },
-    { key: 'anytime', icon: '⏱️', title: 'Anytime', time: 'No fixed window', cutoffHour: null },
+    { key: 'morning', icon: 'sunrise', title: 'Morning', time: '7–10 AM', startHour: 7,  cutoffHour: 10, missedWhen: 'this morning' },
+    { key: 'lunch',   icon: 'sun',     title: 'Lunch',   time: '12–2 PM', startHour: 12, cutoffHour: 14, missedWhen: 'at lunch' },
+    { key: 'evening', icon: 'moon',    title: 'Evening', time: '9–11 PM', startHour: 21, cutoffHour: 23, missedWhen: 'this evening' },
+    { key: 'anytime', icon: 'clock',   title: 'Anytime', time: 'No fixed window', startHour: null, cutoffHour: null, missedWhen: '' },
   ];
+  const windowKeyOf = (item) => (STACK_WINDOWS.some(w => w.key === item.window) ? item.window : 'anytime');
+
+  // Inline stroke icons (same style as topbar.js): 24 viewBox, currentColor, 1.8 stroke
+  const svg = (p) => '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
+  const ICON = {
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    sunrise: '<path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41M19.07 10.93l-1.41 1.41M2 18h2M20 18h2M22 22H2"/><path d="m8 6 4-4 4 4"/><path d="M16 18a4 4 0 0 0-8 0"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  };
 
   // ====== SUPPLEMENT DATABASE — researched defaults ======
   const SUPPLEMENT_DB = [
@@ -642,29 +847,39 @@ main {
     { name: 'Chaga', dose: '1–2g', window: 'morning', note: 'Antioxidant and immune', icon: '🍄', aliases: ['chaga'] },
   ];
 
-  let todayKey = `stack:taken:${getActiveDate()}`;
+  // Computed on every read so a page resumed after the 6:30 rollover never writes yesterday's map
+  const takenKey = () => `stack:taken:${getActiveDate()}`;
 
+  // Read-only: never seed or reset here. A write on read would race the first cloud pull
+  // and could replace the synced stack with defaults.
   function getItems() {
-    const storedVersion = storeGet('stack:version');
     const stored = storeGet('stack:items');
-    if (!stored || !Array.isArray(stored) || !stored.length || storedVersion !== TEMPLATE_VERSION) {
-      const fresh = JSON.parse(JSON.stringify(STACK_DEFAULTS));
-      storeSet('stack:items', fresh);
-      storeSet('stack:version', TEMPLATE_VERSION);
-      return fresh;
-    }
-    return stored;
+    if (Array.isArray(stored)) return stored.filter(i => i && typeof i === 'object' && i.id != null);
+    return JSON.parse(JSON.stringify(STACK_DEFAULTS));
   }
-  function setItems(items) { storeSet('stack:items', items); }
-  function getTaken() { return storeGet(todayKey) || {}; }
-  function setTaken(map) { storeSet(todayKey, map); }
-  function getLow() { return storeGet('stack:low') || []; }
+  function setItems(items) {
+    storeSet('stack:items', items);
+    // Older builds wipe stack:items when stack:version != 5, so keep it set (never downgrade).
+    const v = storeGet('stack:version');
+    if (!(typeof v === 'number' && v >= TEMPLATE_VERSION)) storeSet('stack:version', TEMPLATE_VERSION);
+  }
+  function getTaken(key = takenKey()) {
+    const t = storeGet(key);
+    return (t && typeof t === 'object' && !Array.isArray(t)) ? t : {};
+  }
+  function setTaken(map, key = takenKey()) { storeSet(key, map); }
+  function getLow() { const l = storeGet('stack:low'); return Array.isArray(l) ? l : []; }
   function setLow(arr) { storeSet('stack:low', arr); }
 
+  let justToggled = new Set(); // rows whose check should pop on the next render
+
   function toggleTaken(id) {
-    const taken = getTaken();
+    const key = takenKey();
+    const taken = getTaken(key);
     if (taken[id]) delete taken[id]; else taken[id] = Date.now();
-    setTaken(taken); render();
+    setTaken(taken, key);
+    justToggled = new Set([id]);
+    render();
   }
   function toggleLow(id) {
     const low = getLow();
@@ -674,15 +889,16 @@ main {
   }
   function deleteItem(id) {
     setItems(getItems().filter(i => i.id !== id));
-    const taken = getTaken();
-    delete taken[id];
-    setTaken(taken);
-    setLow(getLow().filter(x => x !== id));
+    const key = takenKey();
+    const taken = getTaken(key);
+    if (id in taken) { delete taken[id]; setTaken(taken, key); }
+    const low = getLow();
+    if (low.includes(id)) setLow(low.filter(x => x !== id));
     render();
   }
   function addItem(name, dose, windowKey, note = '') {
     const v = String(name || '').trim();
-    if (!v) return;
+    if (!v) return null;
     const items = getItems();
     const id = 'custom_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     items.push({
@@ -694,12 +910,15 @@ main {
     });
     setItems(items);
     render();
+    return id;
   }
+  // updateItem(id, 'name', v) or updateItem(id, { name, dose, ... }): one read-modify-write
   function updateItem(id, field, value) {
     const items = getItems();
     const item = items.find(i => i.id === id);
     if (!item) return;
-    item[field] = value;
+    if (field && typeof field === 'object') Object.assign(item, field);
+    else item[field] = value;
     setItems(items);
   }
 
@@ -709,98 +928,162 @@ main {
     const low = getLow();
     const totalCount = items.length;
     const takenCount = items.filter(i => taken[i.id]).length;
-    document.getElementById('stackProgressText').textContent =
-      `${takenCount} / ${totalCount} taken today · resets at 6:30 AM`;
+    const nowHour = activeHour();
+
+    document.getElementById('healthSub').textContent = `${activeDateLabel()} · Resets 6:30`;
+
+    // Hero: the one number
+    document.getElementById('stackHero').hidden = totalCount === 0;
+    document.getElementById('stackAdd').hidden = totalCount === 0;
+    document.getElementById('stackTakenNum').textContent = takenCount;
+    document.getElementById('stackTotalNum').textContent = `/ ${totalCount}`;
     const pct = totalCount === 0 ? 0 : (takenCount / totalCount) * 100;
     document.getElementById('stackProgressBar').style.width = pct + '%';
+    const bar = document.getElementById('stackBar');
+    bar.setAttribute('aria-valuenow', takenCount);
+    bar.setAttribute('aria-valuemax', totalCount);
+    bar.setAttribute('aria-valuetext', `${takenCount} of ${totalCount} taken`);
+    renderNext(items, taken, nowHour, takenCount, totalCount);
 
     const groupsEl = document.getElementById('stackGroups');
+    // Keep keyboard focus on the same control across the rebuild
+    const active = document.activeElement;
+    const refocus = (active && groupsEl.contains(active) && active.dataset.action)
+      ? { action: active.dataset.action, id: active.dataset.id, win: active.dataset.window } : null;
     groupsEl.innerHTML = '';
 
-    const now = new Date();
-    const nowHour = now.getHours() + (now.getMinutes() / 60);
-
     STACK_WINDOWS.forEach(win => {
-      const winItems = items.filter(i => (i.window || 'anytime') === win.key);
+      const winItems = items.filter(i => windowKeyOf(i) === win.key);
       if (winItems.length === 0) return;
 
-      const group = document.createElement('div');
-      group.className = 'stack-window';
-      group.innerHTML = `
-        <div class="stack-window-header">
-          <span class="stack-window-icon">${win.icon}</span>
-          <span class="stack-window-title">${win.title}</span>
-          <span class="stack-window-time">${win.time}</span>
-        </div>`;
-
+      const done = winItems.filter(i => taken[i.id]).length;
+      const open = winItems.length - done;
       const isPastCutoff = win.cutoffHour !== null && nowHour > win.cutoffHour;
+      const isNow = win.startHour !== null && win.startHour <= nowHour && nowHour <= win.cutoffHour && open > 0;
+
+      let right;
+      if (open === 0) right = `<span class="meta is-complete">${done}/${winItems.length}</span>`;
+      else if (open >= 2) right = `<button type="button" class="row-section-action" data-action="take-all" data-window="${win.key}" aria-label="Take all ${win.title.toLowerCase()} items">Take all</button>`;
+      else right = `<span class="meta">${done}/${winItems.length}</span>`;
+
+      const group = document.createElement('section');
+      group.className = 'stack-window';
+      group.setAttribute('aria-label', win.title);
+      group.innerHTML = `
+        <div class="row-section-label stack-window-header">
+          <span><span class="stack-window-title">${win.title}</span>${win.key !== 'anytime' ? `<span class="meta stack-window-time">${win.time}</span>` : ''}${isNow ? '<span class="row-tag row-tag--accent">Now</span>' : ''}</span>
+          ${right}
+        </div>
+        <div class="row-list"></div>`;
+      const list = group.querySelector('.row-list');
 
       winItems.forEach(item => {
         const isTaken = !!taken[item.id];
         const isLow = low.includes(item.id);
         const isMissed = !isTaken && isPastCutoff;
+        const id = escapeHtml(item.id);
+        const name = escapeHtml(item.name);
+
+        const tags = [
+          isMissed && '<span class="row-tag row-tag--negative">Missed</span>',
+          isLow && '<span class="row-tag row-tag--warning">Low</span>',
+          item.tag === 'not-ordered' && '<span class="row-tag row-tag--warning">Not ordered</span>',
+          item.tag === 'stack' && '<span class="row-tag">Stack</span>',
+        ].filter(Boolean).join('');
+        const takenAt = isTaken && Number(taken[item.id])
+          ? new Date(Number(taken[item.id])).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+        const meta = [
+          takenAt && `<span class="mono">${takenAt}</span>`,
+          item.dose && `<span class="mono">${escapeHtml(item.dose)}</span>`,
+          item.note && escapeHtml(item.note),
+        ].filter(Boolean).join(' · ');
 
         const row = document.createElement('div');
-        row.className = 'stack-item' + (isTaken ? ' taken' : '') + (isMissed ? ' missed' : '');
-
-        let tagHtml = '';
-        if (item.tag === 'stack') tagHtml = '<span class="stack-item-tag tag-stack">stack</span>';
-        else if (item.tag === 'not-ordered') tagHtml = '<span class="stack-item-tag tag-not-ordered">not ordered</span>';
-
+        row.className = 'stack-item' + (isTaken ? ' is-done' : '') + (isMissed ? ' is-missed' : '') + (justToggled.has(item.id) ? ' just-toggled' : '');
+        row.dataset.id = item.id;
         row.innerHTML = `
-          <button class="stack-check ${isTaken ? 'checked' : ''}" data-action="toggle" data-id="${item.id}" aria-label="Mark taken">${isTaken ? '✓' : ''}</button>
-          <div class="stack-item-body">
-            <div class="stack-item-name" data-edit="name" data-id="${item.id}">
-              <span class="stack-item-name-text">${escapeHtml(item.name)}</span>${tagHtml}
-            </div>
-            <div class="stack-item-meta" data-edit="meta" data-id="${item.id}">${escapeHtml(metaText(item))}</div>
-          </div>
-          <button class="stack-low-btn ${isLow ? 'is-low' : ''}" data-action="low" data-id="${item.id}">↓ Running low</button>
-          <button class="stack-item-del" data-action="del" data-id="${item.id}" aria-label="Delete">×</button>`;
-
-        group.appendChild(row);
+          <button type="button" class="stack-item-hit" data-action="toggle" data-id="${id}" role="checkbox" aria-checked="${isTaken}">
+            <span class="stack-check${isTaken ? ' checked' : ''}" aria-hidden="true"></span>
+            <span class="stack-item-body">
+              <span class="stack-item-name">${name}${tags}</span>
+              ${meta ? `<span class="stack-item-meta">${meta}</span>` : ''}
+            </span>
+          </button>
+          <button type="button" class="row-icon-btn stack-item-more" data-action="more" data-id="${id}" aria-label="Edit ${name}">${svg(ICON.more)}</button>`;
+        list.appendChild(row);
       });
 
       groupsEl.appendChild(group);
     });
 
-    if (groupsEl.children.length === 0) {
-      groupsEl.innerHTML = `<div class="stack-window-empty">No items yet — add one below to start your stack.</div>`;
+    if (!items.length) {
+      groupsEl.innerHTML = `
+        <div class="row-card row-empty">
+          <div class="row-empty-title">No supplements yet</div>
+          <p class="row-empty-body">Add what you take and when. Checks reset every morning at 6:30.</p>
+          <button type="button" class="row-btn row-btn--primary" data-action="add">Add supplement</button>
+        </div>`;
     }
+
+    if (refocus) {
+      const sel = `[data-action="${refocus.action}"]` +
+        (refocus.id != null ? `[data-id="${CSS.escape(refocus.id)}"]` : '') +
+        (refocus.win != null ? `[data-window="${CSS.escape(refocus.win)}"]` : '');
+      const el = groupsEl.querySelector(sel);
+      if (el) el.focus({ preventScroll: true });
+    }
+    justToggled = new Set();
 
     // Sync ticker after every render
     renderTicker();
   }
 
+  // "Next · Magnesium glycinate, 9–11 PM": first untaken item in a window that is still open
+  function renderNext(items, taken, nowHour, takenCount, totalCount) {
+    const el = document.getElementById('stackNext');
+    if (!totalCount) { el.textContent = ''; return; }
+    if (takenCount === totalCount) { el.textContent = 'All taken for today'; return; }
+    for (const win of STACK_WINDOWS) {
+      if (win.cutoffHour !== null && nowHour > win.cutoffHour) continue;
+      const it = items.find(i => windowKeyOf(i) === win.key && !taken[i.id]);
+      if (it) {
+        el.innerHTML = `Next · <b>${escapeHtml(it.name)}</b>, ${win.key === 'anytime' ? 'anytime' : win.time}`;
+        return;
+      }
+    }
+    el.textContent = 'Nothing else due today';
+  }
+
   // ====== TICKER ======
   let tickerIndex = 0;
   let tickerInterval = null;
+  let tickerPausedUntil = 0;
   let cachedIssues = [];
+  const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function getStackIssues() {
     const items = getItems();
     const taken = getTaken();
     const low = getLow();
-    const now = new Date();
-    const nowHour = now.getHours() + (now.getMinutes() / 60);
+    const nowHour = activeHour();
 
     const missed = [];
     const lowList = [];
 
     items.forEach(item => {
-      const win = STACK_WINDOWS.find(w => w.key === (item.window || 'anytime'));
+      const win = STACK_WINDOWS.find(w => w.key === windowKeyOf(item));
       const isPastCutoff = win && win.cutoffHour !== null && nowHour > win.cutoffHour;
       const isTaken = !!taken[item.id];
       if (isPastCutoff && !isTaken) {
         missed.push({
-          type: 'missed',
-          text: `${item.name} — missed ${win.title.toLowerCase()} dose`
+          type: 'missed', id: item.id,
+          text: `Missed ${win.missedWhen}: ${item.name}` // status first, so truncation only cuts the name
         });
       }
       if (low.includes(item.id)) {
         lowList.push({
-          type: 'low',
-          text: `${item.name} — running low, reorder soon`
+          type: 'low', id: item.id,
+          text: `Running low: ${item.name}`
         });
       }
     });
@@ -813,28 +1096,30 @@ main {
     const tickerEl = document.getElementById('stackTicker');
     const msgEl = document.getElementById('stackTickerMsg');
     const countEl = document.getElementById('stackTickerCount');
-    const totalItems = getItems().length;
 
     cachedIssues = issues;
 
+    // Nothing missed or low: no ticker (never a false "all caught up")
     if (issues.length === 0) {
-      msgEl.textContent = 'All caught up — keep it rolling';
-      tickerEl.classList.remove('status-low', 'status-missed');
-      countEl.textContent = `0/${totalItems}`;
+      tickerEl.hidden = true;
+      msgEl.textContent = '';
+      countEl.textContent = '';
       tickerIndex = 0;
       return;
     }
 
-    const hasMissed = issues.some(i => i.type === 'missed');
-    tickerEl.classList.remove('status-low', 'status-missed');
-    tickerEl.classList.add(hasMissed ? 'status-missed' : 'status-low');
-
+    tickerEl.hidden = false;
     if (tickerIndex >= issues.length) tickerIndex = 0;
-    msgEl.textContent = issues[tickerIndex].text;
-    countEl.textContent = `${issues.length}/${totalItems}`;
+    const cur = issues[tickerIndex];
+    tickerEl.classList.toggle('is-missed', cur.type === 'missed');
+    tickerEl.classList.toggle('is-low', cur.type === 'low');
+    msgEl.textContent = cur.text;
+    countEl.textContent = issues.length > 1 ? `${tickerIndex + 1} of ${issues.length}` : '';
+    tickerEl.setAttribute('aria-label', `${cur.text}. Show in list`);
   }
 
   function cycleTicker() {
+    if (Date.now() < tickerPausedUntil) return;
     if (cachedIssues.length <= 1) {
       renderTicker();
       return;
@@ -845,111 +1130,215 @@ main {
       tickerIndex++;
       renderTicker();
       msgEl.classList.remove('is-fading');
-    }, 280);
+    }, 240);
   }
 
   function startTicker() {
     if (tickerInterval) clearInterval(tickerInterval);
+    if (reduceMotion()) return; // keep the first issue on screen
     tickerInterval = setInterval(cycleTicker, 5000);
   }
 
-  function metaText(item) {
-    const parts = [];
-    if (item.dose) parts.push(item.dose);
-    if (item.note) parts.push(item.note);
-    return parts.join(' · ');
+  // Tap the ticker: jump to that row and hold the rotation for 10s
+  document.getElementById('stackTicker').addEventListener('click', () => {
+    const it = cachedIssues[tickerIndex];
+    if (!it) return;
+    tickerPausedUntil = Date.now() + 10000;
+    flashRow(it.id, 'center');
+  });
+
+  function flashRow(id, block) {
+    const row = document.querySelector(`.stack-item[data-id="${CSS.escape(String(id))}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: block || 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' });
+    row.classList.add('is-flash');
+    setTimeout(() => row.classList.remove('is-flash'), 900);
   }
+
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  document.getElementById('stackGroups').addEventListener('click', (e) => {
+  // ====== TOAST (one at a time; the only action is Undo) ======
+  const toastEl = document.getElementById('stackToast');
+  const toastMsg = document.getElementById('stackToastMsg');
+  const toastUndo = document.getElementById('stackToastUndo');
+  let toastTimer = null;
+  let toastUndoFn = null;
+
+  function showToast(msg, undo) {
+    // One toast at a time: topbar.js's water toast sits in the same spot
+    const waterToast = document.getElementById('topbarToast');
+    if (waterToast) waterToast.classList.remove('in');
+    toastMsg.textContent = msg;
+    toastUndoFn = typeof undo === 'function' ? undo : null;
+    toastUndo.hidden = !toastUndoFn;
+    toastEl.classList.toggle('has-action', !!toastUndoFn);
+    toastEl.classList.add('in');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 4000);
+  }
+  function hideToast() {
+    clearTimeout(toastTimer);
+    toastEl.classList.remove('in');
+    toastUndoFn = null;
+  }
+  toastUndo.addEventListener('click', () => {
+    const fn = toastUndoFn;
+    hideToast();
+    if (fn) fn();
+  });
+
+  // ====== STACK ACTIONS (one delegated listener; delete lives in the edit sheet) ======
+  function takeAll(winKey) {
+    const key = takenKey();
+    const t = getTaken(key);
+    const ids = getItems().filter(i => windowKeyOf(i) === winKey && !t[i.id]).map(i => i.id);
+    if (!ids.length) return;
+    const ts = Date.now();
+    ids.forEach(id => { t[id] = ts; });
+    setTaken(t, key);
+    justToggled = new Set(ids);
+    render();
+    showToast(`Marked ${ids.length} taken`, () => {
+      const u = getTaken(key);
+      ids.forEach(id => { if (u[id] === ts) delete u[id]; });
+      setTaken(u, key);
+      render();
+    });
+  }
+
+  document.getElementById('stackSection').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
-    e.stopPropagation();
     const id = btn.dataset.id;
-    if (btn.dataset.action === 'toggle') toggleTaken(id);
-    else if (btn.dataset.action === 'low') toggleLow(id);
-    else if (btn.dataset.action === 'del') deleteItem(id);
-  });
-  document.getElementById('stackGroups').addEventListener('pointerdown', (e) => {
-    const btn = e.target.closest('[data-action="del"]');
-    if (!btn) return;
-    e.preventDefault(); e.stopPropagation();
-    deleteItem(btn.dataset.id);
-  });
-  document.getElementById('stackGroups').addEventListener('click', (e) => {
-    const editEl = e.target.closest('[data-edit]');
-    if (!editEl) return;
-    if (e.target.closest('[data-action]')) return;
-    if (editEl.getAttribute('contenteditable') === 'true') return;
-    startEdit(editEl);
+    const action = btn.dataset.action;
+    if (action === 'toggle') toggleTaken(id);
+    else if (action === 'take-all') takeAll(btn.dataset.window);
+    else if (action === 'more') openSheet('edit', id, { action: 'more', id });
+    else if (action === 'add') openSheet('add', null, btn.closest('#stackAdd') ? { action: 'add' } : null);
   });
 
-  function startEdit(el) {
-    const id = el.dataset.id;
-    const field = el.dataset.edit;
-    if (field === 'name') {
-      const textSpan = el.querySelector('.stack-item-name-text');
-      if (!textSpan) return;
-      textSpan.setAttribute('contenteditable', 'true');
-      textSpan.style.outline = '1px solid rgba(255,255,255,0.25)';
-      textSpan.style.outlineOffset = '4px';
-      textSpan.style.borderRadius = '4px';
-      textSpan.focus();
-      placeCaretAtEnd(textSpan);
-      const finish = (commit) => {
-        textSpan.removeAttribute('contenteditable');
-        textSpan.style.outline = ''; textSpan.style.outlineOffset = '';
-        if (commit) {
-          const newVal = textSpan.textContent.trim();
-          if (newVal) updateItem(id, 'name', newVal); else render();
-        } else render();
-      };
-      textSpan.addEventListener('blur', () => finish(true), { once: true });
-      textSpan.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); textSpan.blur(); }
-        if (e.key === 'Escape') { textSpan.blur(); render(); }
-      });
-    }
-    if (field === 'meta') {
-      el.setAttribute('contenteditable', 'true');
-      el.focus(); placeCaretAtEnd(el);
-      const finish = (commit) => {
-        el.removeAttribute('contenteditable');
-        if (commit) {
-          const text = el.textContent.trim();
-          const parts = text.split(/\s*·\s*/);
-          updateItem(id, 'dose', parts[0] || '');
-          updateItem(id, 'note', parts.slice(1).join(' · '));
-        }
-        render();
-      };
-      el.addEventListener('blur', () => finish(true), { once: true });
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
-        if (e.key === 'Escape') { el.blur(); render(); }
-      });
-    }
-  }
-
-  function placeCaretAtEnd(el) {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(false);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }
-
-  // ====== ADD FORM + SEARCH AUTOCOMPLETE ======
+  // ====== ADD / EDIT SHEET + SEARCH AUTOCOMPLETE ======
+  const sheetBg = document.getElementById('stackSheetBg');
+  const sheetEl = document.getElementById('stackSheet');
+  const sheetTitle = document.getElementById('stackSheetTitle');
+  const sheetDone = document.getElementById('stackSheetDone');
+  const sheetFoot = document.getElementById('stackAddFoot');
+  const editActions = document.getElementById('stackEditActions');
+  const lowToggle = document.getElementById('stackLowToggle');
   const nameInput = document.getElementById('stackAddName');
   const doseInput = document.getElementById('stackAddDose');
   const winSelect = document.getElementById('stackAddWindow');
+  const noteInput = document.getElementById('stackAddNote');
   const addBtn = document.getElementById('stackAddBtn');
   const resultsEl = document.getElementById('stackSearchResults');
 
-  let pendingNote = ''; // hidden note auto-filled when a DB result is selected
+  let sheetMode = null;     // 'add' | 'edit'
+  let sheetItemId = null;   // item being edited
+  let sheetInitial = null;  // field values when the edit sheet opened
+  let sheetReturn = null;   // what to focus on close
+
+  function sheetValues() {
+    return { name: nameInput.value.trim(), dose: doseInput.value.trim(), window: winSelect.value, note: noteInput.value.trim() };
+  }
+  function updateAddEnabled() { addBtn.disabled = !nameInput.value.trim(); }
+  function updateLowLabel() {
+    const isLow = sheetItemId != null && getLow().includes(sheetItemId);
+    lowToggle.textContent = isLow ? 'Back in stock' : 'Mark as running low';
+    lowToggle.setAttribute('aria-pressed', String(isLow));
+  }
+
+  function openSheet(mode, id, returnTo) {
+    let item = null;
+    if (mode === 'edit') {
+      item = getItems().find(i => i.id === id);
+      if (!item) return;
+    }
+    sheetMode = mode;
+    sheetItemId = item ? item.id : null;
+    sheetReturn = returnTo || null;
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+
+    if (item) {
+      sheetTitle.textContent = 'Edit supplement';
+      nameInput.value = item.name || '';
+      doseInput.value = item.dose || '';
+      winSelect.value = windowKeyOf(item);
+      noteInput.value = item.note || '';
+      sheetInitial = sheetValues();
+      updateLowLabel();
+    } else {
+      sheetTitle.textContent = 'Add supplement';
+      nameInput.value = '';
+      doseInput.value = '';
+      winSelect.value = 'morning';
+      noteInput.value = '';
+      sheetInitial = null;
+    }
+    sheetDone.hidden = !item;
+    editActions.hidden = !item;
+    sheetFoot.hidden = !!item;
+    sheetEl.classList.toggle('is-edit', !!item);
+    updateAddEnabled();
+    sheetBg.classList.add('show');
+    // Add: straight into the name field. Edit: no keyboard until a field is tapped.
+    if (item) sheetTitle.focus({ preventScroll: true });
+    else nameInput.focus({ preventScroll: true });
+  }
+
+  function closeSheet() {
+    if (!sheetBg.classList.contains('show')) return;
+    sheetBg.classList.remove('show');
+    if (sheetBg.contains(document.activeElement)) document.activeElement.blur();
+    resultsEl.hidden = true;
+    const ret = sheetReturn;
+    sheetMode = null; sheetItemId = null; sheetInitial = null; sheetReturn = null;
+    if (ret) {
+      const sel = ret.action === 'add' ? '#stackAdd [data-action="add"]'
+        : `[data-action="${ret.action}"][data-id="${CSS.escape(String(ret.id))}"]`;
+      const el = document.querySelector(sel);
+      if (el) el.focus({ preventScroll: true });
+    }
+  }
+
+  // Done: write only the fields that changed, so a value synced in meanwhile is not overwritten
+  function saveEdit() {
+    const id = sheetItemId;
+    if (id == null || !sheetInitial) { closeSheet(); return; }
+    const cur = sheetValues();
+    const patch = {};
+    if (cur.name && cur.name !== sheetInitial.name.trim()) patch.name = cur.name;
+    ['dose', 'window', 'note'].forEach(f => {
+      if (cur[f] !== String(sheetInitial[f]).trim()) patch[f] = cur[f];
+    });
+    if (Object.keys(patch).length) updateItem(id, patch);
+    closeSheet();
+    render();
+  }
+
+  function deleteFromSheet() {
+    const id = sheetItemId;
+    if (id == null) return;
+    const items = getItems();
+    const index = items.findIndex(i => i.id === id);
+    if (index === -1) { closeSheet(); return; }
+    const key = takenKey();
+    const snap = { item: items[index], index, key, takenTs: getTaken(key)[id], wasLow: getLow().includes(id) };
+    deleteItem(id);
+    closeSheet();
+    showToast(`Deleted ${snap.item.name}`, () => {
+      const list = getItems();
+      if (!list.some(i => i.id === id)) {
+        list.splice(Math.min(snap.index, list.length), 0, snap.item);
+        setItems(list);
+      }
+      if (snap.takenTs) { const t = getTaken(snap.key); t[id] = snap.takenTs; setTaken(t, snap.key); }
+      if (snap.wasLow && !getLow().includes(id)) setLow([...getLow(), id]);
+      render();
+    });
+  }
 
   function searchSupplements(q) {
     const query = q.toLowerCase().trim();
@@ -977,22 +1366,22 @@ main {
     resultsEl.innerHTML = matches.map(s => {
       const winMeta = STACK_WINDOWS.find(w => w.key === s.window) || STACK_WINDOWS[3];
       return `
-        <button class="stack-result" data-name="${escapeHtml(s.name)}" data-dose="${escapeHtml(s.dose)}" data-window="${s.window}" data-note="${escapeHtml(s.note)}">
-          <div class="stack-result-icon">${s.icon || '💊'}</div>
-          <div class="stack-result-body">
-            <div class="stack-result-name">${escapeHtml(s.name)}</div>
-            <div class="stack-result-meta">${escapeHtml(s.dose)} · ${winMeta.icon} ${winMeta.title.toLowerCase()} · ${escapeHtml(s.note)}</div>
-          </div>
+        <button type="button" class="stack-result" data-name="${escapeHtml(s.name)}" data-dose="${escapeHtml(s.dose)}" data-window="${s.window}" data-note="${escapeHtml(s.note)}">
+          <span class="row-tile" aria-hidden="true">${svg(ICON[winMeta.icon])}</span>
+          <span class="stack-result-body">
+            <span class="stack-result-name">${escapeHtml(s.name)}</span>
+            <span class="stack-result-meta">${escapeHtml(s.dose)} · ${winMeta.title} · ${escapeHtml(s.note)}</span>
+          </span>
         </button>`;
     }).join('');
   }
 
   nameInput.addEventListener('input', () => {
-    renderSearchResults(nameInput.value);
-    pendingNote = ''; // reset note if user is typing manually
+    if (sheetMode === 'add') renderSearchResults(nameInput.value);
+    updateAddEnabled();
   });
   nameInput.addEventListener('focus', () => {
-    if (nameInput.value.trim()) renderSearchResults(nameInput.value);
+    if (sheetMode === 'add' && nameInput.value.trim()) renderSearchResults(nameInput.value);
   });
 
   document.addEventListener('click', (e) => {
@@ -1005,39 +1394,119 @@ main {
     nameInput.value = btn.dataset.name;
     doseInput.value = btn.dataset.dose;
     winSelect.value = btn.dataset.window;
-    pendingNote = btn.dataset.note;
+    noteInput.value = btn.dataset.note;
     resultsEl.hidden = true;
+    updateAddEnabled();
     addBtn.focus();
   });
 
   addBtn.addEventListener('click', () => {
-    addItem(nameInput.value, doseInput.value, winSelect.value, pendingNote);
-    nameInput.value = '';
-    doseInput.value = '';
-    pendingNote = '';
-    resultsEl.hidden = true;
-    nameInput.focus();
+    if (sheetMode !== 'add') return;
+    const v = sheetValues();
+    if (!v.name) { nameInput.focus(); return; }
+    const id = addItem(v.name, v.dose, v.window, v.note);
+    closeSheet();
+    if (!id) return;
+    const win = STACK_WINDOWS.find(w => w.key === v.window) || STACK_WINDOWS[3];
+    showToast(`Added to ${win.title}`, () => deleteItem(id));
+    flashRow(id);
   });
 
-  [nameInput, doseInput].forEach(i => {
+  sheetDone.addEventListener('click', saveEdit);
+  document.getElementById('stackSheetClose').addEventListener('click', closeSheet);
+  document.getElementById('stackDelete').addEventListener('click', deleteFromSheet);
+  lowToggle.addEventListener('click', () => {
+    if (sheetItemId == null) return;
+    toggleLow(sheetItemId);
+    updateLowLabel();
+  });
+  sheetBg.addEventListener('click', (e) => { if (e.target === sheetBg) closeSheet(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sheetBg.classList.contains('show')) { e.preventDefault(); closeSheet(); }
+  });
+
+  [nameInput, doseInput, noteInput].forEach(i => {
     i.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        // If search dropdown is open with matches, pick the first one
+        // If search results are open with matches, pick the first one
         if (!resultsEl.hidden && i === nameInput) {
           const firstResult = resultsEl.querySelector('.stack-result');
           if (firstResult) { e.preventDefault(); firstResult.click(); return; }
         }
-        addBtn.click();
+        e.preventDefault();
+        if (sheetMode === 'edit') saveEdit(); else addBtn.click();
       }
-      if (e.key === 'Escape') resultsEl.hidden = true;
+      if (e.key === 'Escape' && !resultsEl.hidden) { e.stopPropagation(); resultsEl.hidden = true; }
     });
   });
 
-  setInterval(() => {
-    const newKey = `stack:taken:${getActiveDate()}`;
-    if (newKey !== todayKey) todayKey = newKey;
+  // ====== EMBEDDED WATER TRACKER (po-water.html in an iframe) ======
+  const waterFrame = document.getElementById('waterFrame');
+  const waterIframe = waterFrame.querySelector('.water-iframe');
+
+  function postToWater(msg) {
+    try { if (waterIframe.contentWindow) waterIframe.contentWindow.postMessage(msg, '*'); } catch (e) {}
+  }
+  // file:// origins are opaque ('null'), so trust e.source, never e.origin
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (e.source !== waterIframe.contentWindow || !d || typeof d !== 'object') return;
+    if (d.type === 'row:water-height' || d.poWaterH) {
+      const h = Number(d.type === 'row:water-height' ? (d.height != null ? d.height : d.h) : d.poWaterH);
+      if (h > 100 && h < 10000 && !waterIframe.classList.contains('is-sheet')) waterIframe.style.height = Math.ceil(h) + 'px';
+    } else if (d.type === 'row:water-sheet') {
+      if (d.open) {
+        // Hold the section's height while the iframe floats over the viewport for po-water's settings sheet
+        waterFrame.style.height = waterIframe.offsetHeight + 'px';
+        waterIframe.classList.add('is-sheet', 'is-open');
+        document.body.classList.add('water-sheet-open');
+        postToWater({ type: 'row:water-sheet-ready' });
+      } else {
+        waterIframe.classList.remove('is-sheet', 'is-open');
+        document.body.classList.remove('water-sheet-open');
+        waterFrame.style.height = '';
+      }
+    }
+  });
+  // Top-bar water "+" writes po_water_v1 from this page: tell the iframe to re-read it.
+  // Its own toast replaces ours (same spot, one at a time).
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('#topbarWaterAdd')) {
+      hideToast();
+      postToWater({ type: 'row:water-refresh' });
+    }
+  });
+
+  // ====== LIVE RE-RENDER (sync pulls, other tabs, resume, rollover) ======
+  // Everything above re-reads localStorage on each action, so a re-render is all a pull needs.
+  // While a sheet field is focused, wait for blur so typing is never interrupted.
+  let renderPending = false;
+  const isEditingField = () => {
+    const a = document.activeElement;
+    return !!(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName));
+  };
+  function renderSoon() {
+    if (isEditingField()) { renderPending = true; return; }
     render();
-  }, 60 * 1000);
+  }
+  document.addEventListener('focusout', () => {
+    if (!renderPending) return;
+    setTimeout(() => {
+      if (renderPending && !isEditingField()) { renderPending = false; render(); }
+    }, 0);
+  });
+  // sync.js onApplied dispatches a key-less 'storage'; other tabs send real keys
+  window.addEventListener('storage', (e) => {
+    if (!e.key || e.key.indexOf('stack:') === 0) renderSoon();
+    if (!e.key) postToWater({ type: 'row:water-refresh' });
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) render(); });
+  // iOS WebKit only applies :active styles when a touchstart listener exists
+  document.addEventListener('touchstart', () => {}, { passive: true });
+
+  // Every minute: missed cutoffs, the "Now" marker and the 6:30 rollover
+  setInterval(render, 60 * 1000);
 
   render();
   startTicker();
@@ -1050,6 +1519,9 @@ document.addEventListener('DOMContentLoaded', function () {
     appKey: 'health',
     syncedKeys: ['stack:items', 'stack:version', 'stack:low', 'po_water_v1'],
     syncedPrefixes: ['stack:taken:'],
+    // A key-less 'storage' event makes the stack re-read localStorage and re-render
+    // (deferred while a field is focused), refreshes topbar.js's water pill and
+    // tells the embedded water tracker to reload.
     onApplied: function () { window.dispatchEvent(new Event('storage')); }
   });
 });
