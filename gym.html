@@ -16,7 +16,7 @@
      ============================================================= -->
 <script>
 const CONFIG = {
-  appTitle: "V-Taper Recomp",
+  appTitle: "Anterior / Posterior",
 
   // Bump this whenever you change days/exercises/gyms so localStorage is reset.
   configVersion: 4,
@@ -254,6 +254,12 @@ img, video, canvas, svg { max-width: 100%; }
   cursor: pointer; transition: background 0.15s, color 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
+/* Workout first, body tracking (weight + photos) below it */
+.po-shell { display: flex; flex-direction: column; }
+.po-shell > .po-day-pill { order: 0; align-self: center; }
+.po-shell > .po-header { order: 1; }
+.po-shell > .card { order: 2; }
+.po-shell > .wt-section { order: 3; margin-top: 22px; margin-bottom: 0; }
 /* Session progress strip: one segment per exercise of the selected day */
 .wo-progress { display: flex; gap: 4px; margin: 12px 0 2px; }
 .wo-progress button { flex: 1; height: 8px; padding: 0; border: 0; border-radius: 999px; background: rgba(255,255,255,0.09); cursor: pointer; position: relative; overflow: hidden; }
@@ -1840,6 +1846,8 @@ img, video, canvas, svg { max-width: 100%; }
   // RENDER
   // ============================================================
   function renderFilters() {
+    // A single gym needs no picker
+    $('gymSeg').closest('.po-seg-row').style.display = state.gyms.length > 1 ? '' : 'none';
     $('gymSeg').innerHTML = state.gyms.map(g =>
       '<button class="po-seg-btn ' + (g.id === state.filterGym ? 'active' : '') + '" data-gym="' + g.id + '">' + escape(g.name) + '</button>'
     ).join('');
