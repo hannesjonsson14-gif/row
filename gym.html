@@ -19,7 +19,7 @@ const CONFIG = {
   appTitle: "V-Taper Recomp",
 
   // Bump this whenever you change days/exercises/gyms so localStorage is reset.
-  configVersion: 3,
+  configVersion: 4,
 
   units: "kg",
 
@@ -28,14 +28,9 @@ const CONFIG = {
   ],
 
   // Anterior / Posterior is the active program (ported from the Hannes Fitness app).
-  // The older Upper/Lower days stay available in the day picker but aren't in the rotation.
   days: [
     { id: "anterior",  name: "Anterior" },
-    { id: "posterior", name: "Posterior" },
-    { id: "upper-a", name: "Upper A" },
-    { id: "lower-a", name: "Lower A" },
-    { id: "upper-b", name: "Upper B" },
-    { id: "lower-b", name: "Lower B" }
+    { id: "posterior", name: "Posterior" }
   ],
 
   // Anterior → Posterior → Rest, repeating (a 3-day cycle, not tied to weekdays).
@@ -76,40 +71,7 @@ const CONFIG = {
     { name: "Machine Preacher Curl", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 20, rir: "1–2", sets: 2, tips: "Armpits on the pad, full stretch at the bottom, squeeze at the top, no swinging. Swap: Dumbbell Incline Curl." },
     { name: "Seated Hamstring Curl", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 35, rir: "1–2", sets: 2, tips: "Control the negative, don't let the hips pop up. Full stretch at the top. Swap: Lying Leg Curl, Romanian Deadlift." },
     { name: "Machine Leg Press", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 100, rir: "1–2", sets: 2, tips: "Feet a little higher and wider than on Anterior day to bias glutes and hamstrings; full depth, controlled." },
-    { name: "Leg Press Calf Raise", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 50, rir: "1–2", sets: 2, tips: "Full stretch at the bottom (pause 1s), full squeeze at the top (pause 1s). No bouncing. Swap: Standing Calf Raise." },
-
-    // ── UPPER A — Width (lats + side delts) ─────────────────────
-    { name: "Lat Pulldown (wide)",    gym: "comm", day: "upper-a", repMin: 6,  repMax: 10, step: 2.5, startWeight: 50,  rir: "1–2", sets: 4, tips: "Drive elbows DOWN and IN toward your hips — not the bar to your chin. Let shoulder blades fully rise at the top for a complete lat stretch. Lean back ~15°. This stretch-loaded position is where lat width is built." },
-    { name: "Chest-Supported Row",    gym: "comm", day: "upper-a", repMin: 8,  repMax: 12, step: 2.5, startWeight: 40,  rir: "1–2", sets: 3, tips: "Pull to lower ribs, elbows at ~45°, pause and squeeze at the top, then control the stretch on the way down. Don't shrug — keep traps out of it." },
-    { name: "Incline DB Press",       gym: "comm", day: "upper-a", repMin: 8,  repMax: 12, step: 2,   startWeight: 22,  rir: "1–2", sets: 3, tips: "~30° bench. Slight arch, elbows tucked 45–60°, lower to upper chest, press without flaring. Don't touch dumbbells at the top — keep constant tension." },
-    { name: "DB Lateral Raise",       gym: "comm", day: "upper-a", repMin: 12, repMax: 20, step: 1,   startWeight: 8,   rir: "0–1", sets: 4, tips: "PRIORITY. Lead with elbows, soft bend in arm, raise to shoulder height. Pinkie slightly higher than thumb. Slow lower (2–3s). If traps take over the weight is too heavy — lighter + strict beats heavy + sloppy every time." },
-    { name: "EZ-Bar Curl",            gym: "comm", day: "upper-a", repMin: 8,  repMax: 12, step: 1.25,startWeight: 25,  rir: "1",   sets: 3, tips: "Superset with lateral raises. Elbows pinned to sides, no body swing. Full stretch at the bottom — pause briefly. Squeeze at top." },
-    { name: "Triceps Cable Pushdown", gym: "comm", day: "upper-a", repMin: 10, repMax: 15, step: 2.5, startWeight: 20,  rir: "1",   sets: 3, tips: "Elbows fixed at sides throughout. Full lockout at the bottom, then control the stretch up. Don't let elbows flare or drift forward." },
-
-    // ── LOWER A ──────────────────────────────────────────────────
-    { name: "Hack Squat",             gym: "comm", day: "lower-a", repMin: 8,  repMax: 12, step: 5,   startWeight: 60,  rir: "1–2", sets: 4, tips: "Feet shoulder-width, toes out slightly. Full depth your hips tolerate. Knees track over toes — don't let them cave. Back stays flat on pad throughout. Control the descent." },
-    { name: "Romanian Deadlift",      gym: "comm", day: "lower-a", repMin: 8,  repMax: 12, step: 5,   startWeight: 60,  rir: "2",   sets: 3, tips: "Hinge at the hips, soft knees. Bar/DBs stay close to legs. Feel the hamstring stretch, stop when your lower back wants to round. Squeeze glutes as you stand. Don't hyperextend at the top." },
-    { name: "Seated Leg Curl",        gym: "comm", day: "lower-a", repMin: 10, repMax: 15, step: 2.5, startWeight: 35,  rir: "1",   sets: 3, tips: "Superset with calf raises. Control the negative — avoid letting hips pop up. Full stretch at the top, full curl at the bottom. Slow eccentric (2–3s)." },
-    { name: "Standing Calf Raise",    gym: "comm", day: "lower-a", repMin: 8,  repMax: 15, step: 5,   startWeight: 50,  rir: "0–1", sets: 4, tips: "Superset with leg curl. FULL stretch at the bottom — pause 1s. FULL contraction at the top — pause 1s. No bouncing — calves don't grow without the full ROM and slow tempo." },
-    { name: "Leg Extension",          gym: "comm", day: "lower-a", repMin: 12, repMax: 20, step: 2.5, startWeight: 35,  rir: "0–1", sets: 3, tips: "Full lockout at the top, slow lower (2–3s). Keep hips back in the seat. Good isolation — go close to failure here." },
-    { name: "Hanging Leg Raise",      gym: "comm", day: "lower-a", repMin: 10, repMax: 15, step: 0,   startWeight: 0,   rir: "1",   sets: 3, tips: "Curl the pelvis UP (posterior tilt) — don't just swing the legs. Exhale and crunch the ribs toward the hips. Slow lower. If too hard, bend knees; if too easy, add a DB between feet.", bw: true },
-
-    // ── UPPER B — Press + thickness (overhead + rear delts) ──────
-    { name: "Overhead Press (DB)",    gym: "comm", day: "upper-b", repMin: 6,  repMax: 10, step: 2,   startWeight: 20,  rir: "1–2", sets: 4, tips: "Brace abs and glutes hard. Press dumbbells slightly in front — not straight up. Don't overarch the lower back. Full lockout at the top. Lower controlled to shoulder height." },
-    { name: "Lat Pulldown (neutral)", gym: "comm", day: "upper-b", repMin: 8,  repMax: 12, step: 2.5, startWeight: 50,  rir: "1–2", sets: 3, tips: "Shoulder-width neutral grip. Drive elbows toward your hips. Full shoulder-blade rise at the top for the lat stretch. Lean back slightly." },
-    { name: "Incline Machine Press",  gym: "comm", day: "upper-b", repMin: 8,  repMax: 12, step: 2.5, startWeight: 50,  rir: "1–2", sets: 3, tips: "Adjust seat so handles are at upper-chest level. Elbows tucked ~45–60°. Don't let the weight stack touch between reps — keep tension on throughout." },
-    { name: "Cable Lateral Raise",    gym: "comm", day: "upper-b", repMin: 12, repMax: 20, step: 1,   startWeight: 8,   rir: "0–1", sets: 4, tips: "PRIORITY. Cable keeps tension at the top unlike DBs. Lead with elbow, pinkie high, raise to shoulder height. Slow lower. Stand slightly away from the stack to get a better stretch at the bottom." },
-    { name: "Reverse Pec Deck",       gym: "comm", day: "upper-b", repMin: 12, repMax: 20, step: 2.5, startWeight: 25,  rir: "0–1", sets: 3, tips: "Superset with cable laterals. Lead with elbows, think 'spread the bar apart'. Don't let traps shrug up. Full stretch at the front, pause at the back. These should burn." },
-    { name: "Incline DB Curl",        gym: "comm", day: "upper-b", repMin: 8,  repMax: 12, step: 1.25,startWeight: 12,  rir: "1",   sets: 3, tips: "Superset with overhead triceps. Incline angle biases the long head stretch — let arms hang fully at the bottom. Don't swing. Elbows stay behind your body." },
-    { name: "Overhead Triceps Ext",   gym: "comm", day: "upper-b", repMin: 10, repMax: 15, step: 2.5, startWeight: 20,  rir: "1",   sets: 3, tips: "Superset with incline curls. Elbows fixed — only forearms move. Overhead position = bigger stretch on the long head (the biggest part of the tricep). Full lockout at top." },
-
-    // ── LOWER B ──────────────────────────────────────────────────
-    { name: "Leg Press",              gym: "comm", day: "lower-b", repMin: 8,  repMax: 12, step: 5,   startWeight: 100, rir: "1–2", sets: 4, tips: "Full depth your hips tolerate. Knees track over toes — don't let them cave inward. Don't let lower back round off the pad at the bottom. Feet shoulder-width, toes slightly out." },
-    { name: "Hip Thrust",             gym: "comm", day: "lower-b", repMin: 8,  repMax: 12, step: 5,   startWeight: 60,  rir: "2",   sets: 3, tips: "Upper back on bench, bar padded across hips. Drive through heels, squeeze glutes HARD at the top. Don't hyperextend the lower back — ribs stay down. Pause 1s at the top." },
-    { name: "Bulgarian Split Squat",  gym: "comm", day: "lower-b", repMin: 10, repMax: 12, step: 2,   startWeight: 16,  rir: "1–2", sets: 3, tips: "Rear foot elevated. Keep torso upright for more quad focus (lean forward for more glute). Front knee tracks over toes. Log reps per leg. These are brutally effective — embrace the burn." },
-    { name: "Lying Leg Curl",         gym: "comm", day: "lower-b", repMin: 10, repMax: 15, step: 2.5, startWeight: 30,  rir: "1",   sets: 3, tips: "Superset with seated calf. Control the negative — no letting the weight slam down. Avoid hips popping up. Full stretch at the bottom, full curl at the top. Slow eccentric." },
-    { name: "Seated Calf Raise",      gym: "comm", day: "lower-b", repMin: 10, repMax: 20, step: 5,   startWeight: 40,  rir: "0–1", sets: 4, tips: "Superset with leg curl. Full bottom stretch (pause 1s), full top contraction (pause 1s). Seated hits the soleus more than standing. No bouncing." },
-    { name: "Cable Crunch",           gym: "comm", day: "lower-b", repMin: 10, repMax: 15, step: 2.5, startWeight: 20,  rir: "1",   sets: 3, tips: "Kneel, rope behind neck. Curl ribs DOWN toward hips — don't just pull with arms or hips. Keep hips stationary. Exhale as you crunch. Slow lower." }
+    { name: "Leg Press Calf Raise", gym: "comm", day: "posterior", repMin: 8, repMax: 12, step: 2.5, startWeight: 50, rir: "1–2", sets: 2, tips: "Full stretch at the bottom (pause 1s), full squeeze at the top (pause 1s). No bouncing. Swap: Standing Calf Raise." }
   ]
 };
 </script>
